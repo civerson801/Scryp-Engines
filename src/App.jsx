@@ -200,13 +200,18 @@ export default function ScrypEngines() {
     const prompt = engine.prompt(fields);
 
     try {
-  const response = await fetch("/api/generate", {
+const response = await fetch("/api/generate", {
   method: "POST",
   headers: { "Content-Type": "application/json" },
   body: JSON.stringify({ prompt }),
 });
 const data = await response.json();
 setOutput(data.text);
+    } catch (e) {
+      setOutput("Error generating output. Please try again.");
+    }
+    setLoading(false);
+  };
 
   const handleCopy = () => {
     navigator.clipboard.writeText(output);
