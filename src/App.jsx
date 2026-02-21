@@ -205,14 +205,14 @@ export default function ScrypEngines() {
   headers: { "Content-Type": "application/json" },
   body: JSON.stringify({ prompt }),
 });
-      const data = await response.json();
-      const text = data.content?.map((b) => b.text || "").join("\n") || "No output.";
-      setOutput(text);
-    } catch (e) {
-      setOutput("Error generating output. Please try again.");
-    }
-    setLoading(false);
-  };
+const data = await response.json();
+console.log("API response:", JSON.stringify(data));
+const text =
+  data?.content?.[0]?.text ||
+  data?.content?.map?.((b) => b.text || "").join("\n") ||
+  data?.error?.message ||
+  JSON.stringify(data);
+setOutput(text || "No output.");
 
   const handleCopy = () => {
     navigator.clipboard.writeText(output);
