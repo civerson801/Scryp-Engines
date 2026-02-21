@@ -206,13 +206,7 @@ export default function ScrypEngines() {
   body: JSON.stringify({ prompt }),
 });
 const data = await response.json();
-console.log("API response:", JSON.stringify(data));
-const text =
-  data?.content?.[0]?.text ||
-  data?.content?.map?.((b) => b.text || "").join("\n") ||
-  data?.error?.message ||
-  JSON.stringify(data);
-setOutput(text || "No output.");
+setOutput(data.text);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(output);
