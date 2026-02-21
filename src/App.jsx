@@ -14,7 +14,7 @@ const ENGINES = [
       { key: "painPoint", label: "Pain Point / Goal", placeholder: "e.g. reducing manual reporting time" },
       { key: "tone", label: "Tone", type: "select", options: ["Warm & Casual", "Professional", "Urgent / FOMO", "Value-Led"] },
     ],
-    prompt: (f) => `You are a senior sales rep at Scryp, a B2B SaaS platform for sales and operations automation. Write a concise, high-converting follow-up email to ${f.leadName || "[Lead Name]"} at ${f.company || "[Company]"}. 
+    prompt: (f) => `You are a senior sales rep at Scryp, a B2B SaaS platform for sales and operations automation. Write a concise, high-converting follow-up email to ${f.leadName || "[Lead Name]"} at ${f.company || "[Company]"}.
 
 Context: ${f.lastContact || "[last contact context]"}
 Their key pain point or goal: ${f.painPoint || "[pain point]"}
@@ -54,7 +54,7 @@ For each email provide:
 3. Body (concise, punchy, industry-specific language and pain points)
 4. CTA
 
-Make the sequence tell a story — don't repeat the same angle. Use industry-specific language and real pain points that resonate with ${f.industry || "this industry"} operations teams. No filler.`,
+Make the sequence tell a story — don't repeat the same angle. Use industry-specific language and real pain points. No filler.`,
   },
   {
     id: "scheduled-followup",
@@ -81,7 +81,7 @@ Write an email that:
 - Addresses their hesitation subtly or reframes it
 - Introduces the new angle naturally to re-spark interest
 - Ends with a low-pressure ask
-- Feels like it was written by a human who genuinely wants to help, not close at all costs
+- Feels human, not salesy
 
 Keep it under 100 words in the body. Include subject line.`,
   },
@@ -105,11 +105,10 @@ Opening Hook Style: ${f.hook || "Pain Agitation"}
 
 Rules:
 - Subject line must be < 8 words and feel human, not salesy
-- First line must be hyper-personalized using the trigger — no generic openers
+- First line must be hyper-personalized using the trigger
 - Body = 2–3 punchy sentences: problem → Scryp solution → result
 - CTA = one easy yes/no question or a soft calendar ask
 - Do NOT mention features. Focus on outcomes.
-- Sound like a peer reaching out, not a vendor pitching.
 
 Output: Subject + Email only.`,
   },
@@ -124,7 +123,7 @@ Output: Subject + Email only.`,
       { key: "company", label: "Company", placeholder: "e.g. Solara Group" },
       { key: "dormantDuration", label: "How Long Gone Dark", type: "select", options: ["1–2 months", "3–6 months", "6–12 months", "1+ year"] },
       { key: "lastKnownStatus", label: "Last Known Status", type: "select", options: ["Was a customer (churned)", "Was a warm lead (stalled)", "Attended a webinar/event", "Downloaded content"] },
-      { key: "newHook", label: "What's Changed at Scryp", placeholder: "e.g. new AI features, pricing restructure, relevant case study from their industry" },
+      { key: "newHook", label: "What's Changed at Scryp", placeholder: "e.g. new AI features, pricing restructure, relevant case study" },
     ],
     prompt: (f) => `You are a customer success and re-engagement specialist at Scryp. Write a re-engagement email to ${f.contactName || "[Contact]"} at ${f.company || "[Company]"} who has been dormant for ${f.dormantDuration || "3–6 months"}.
 
@@ -133,7 +132,7 @@ New Hook / What's Changed: ${f.newHook || "[new development]"}
 
 Write an email that:
 - Opens without guilt-tripping or being awkward about the silence
-- Leads with what's new or relevant that earned the right to reach back out
+- Leads with what's new or relevant
 - Is brief, warm, and curious — not desperate
 - Ends with a low-commitment ask
 - Subject line should feel fresh, not like "Just checking in..."
@@ -164,7 +163,7 @@ Format:
 - 3–4 short sections: Overview, Highlights, Risks/Blockers, Next Steps
 - Use concise bullet points within sections
 - Tone: confident, data-forward, no filler
-- End with 2–3 clear action items or owner assignments
+- End with 2–3 clear action items
 
 Make it scannable in under 60 seconds.`,
   },
@@ -176,7 +175,7 @@ export default function ScrypEngines() {
   const [output, setOutput] = useState("");
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
-  const outputRef = useRef(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const engine = ENGINES.find((e) => e.id === activeEngine);
 
@@ -185,6 +184,7 @@ export default function ScrypEngines() {
     setFields({});
     setOutput("");
     setCopied(false);
+    setSidebarOpen(false);
   };
 
   const handleFieldChange = (key, value) => {
@@ -196,17 +196,15 @@ export default function ScrypEngines() {
     setLoading(true);
     setOutput("");
     setCopied(false);
-
     const prompt = engine.prompt(fields);
-
     try {
-const response = await fetch("/api/generate", {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ prompt }),
-});
-const data = await response.json();
-setOutput(data.text);
+      const response = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt }),
+      });
+      const data = await response.json();
+      setOutput(data.text);
     } catch (e) {
       setOutput("Error generating output. Please try again.");
     }
@@ -220,24 +218,33 @@ setOutput(data.text);
   };
 
   return (
-    <div style={{
-      fontFamily: "'DM Mono', 'Courier New', monospace",
-      background: "#0A0A0F",
-      minHeight: "100vh",
-      color: "#E0E0E8",
-      padding: "0",
-      overflow: "hidden",
-    }}>
+    <div style={{ fontFamily: "'DM Mono', 'Courier New', monospace", background: "#0A0A0F", minHeight: "100vh", color: "#E0E0E8" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,400&family=Syne:wght@600;700;800&display=swap');
-        * { box-sizing: border-box; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         ::-webkit-scrollbar { width: 4px; background: #111; }
         ::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+
+        .layout {
+          display: grid;
+          grid-template-columns: 260px 1fr;
+          height: calc(100vh - 57px);
+        }
+        @media (max-width: 768px) {
+          .layout { grid-template-columns: 1fr; height: auto; }
+          .sidebar { display: none; position: fixed; top: 57px; left: 0; right: 0; bottom: 0; z-index: 100; overflow-y: auto; }
+          .sidebar.open { display: block !important; }
+          .main-panel { padding: 20px 16px !important; }
+          .header-tags { display: none !important; }
+          .hamburger { display: flex !important; }
+          .engine-form { max-width: 100% !important; }
+        }
+
         .engine-card {
           cursor: pointer;
           border: 1px solid #1E1E2E;
           border-radius: 4px;
-          padding: 16px;
+          padding: 14px;
           background: #0E0E18;
           transition: all 0.15s ease;
           position: relative;
@@ -253,10 +260,10 @@ setOutput(data.text);
           transform-origin: left;
           transition: transform 0.2s ease;
         }
-        .engine-card:hover::before,
-        .engine-card.active::before { transform: scaleX(1); }
+        .engine-card:hover::before, .engine-card.active::before { transform: scaleX(1); }
         .engine-card:hover { background: #13131F; border-color: #2E2E44; }
         .engine-card.active { background: #13131F; border-color: #2E2E44; }
+
         .field-input {
           width: 100%;
           background: #0A0A12;
@@ -271,6 +278,7 @@ setOutput(data.text);
         }
         .field-input:focus { border-color: #3E3E60; }
         .field-input::placeholder { color: #3A3A55; }
+
         .generate-btn {
           background: var(--accent);
           color: #000;
@@ -283,10 +291,13 @@ setOutput(data.text);
           cursor: pointer;
           border-radius: 3px;
           transition: opacity 0.15s, transform 0.1s;
+          width: 100%;
         }
+        @media (min-width: 480px) { .generate-btn { width: auto; } }
         .generate-btn:hover { opacity: 0.88; }
         .generate-btn:active { transform: scale(0.98); }
         .generate-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
         .output-box {
           background: #06060E;
           border: 1px solid #1A1A2E;
@@ -297,18 +308,19 @@ setOutput(data.text);
           color: #C0C0D0;
           white-space: pre-wrap;
           min-height: 120px;
-          position: relative;
+          word-break: break-word;
         }
+
         .loader {
           display: inline-block;
-          width: 10px;
-          height: 10px;
+          width: 10px; height: 10px;
           border: 2px solid #333;
           border-top-color: var(--accent, #00E5B4);
           border-radius: 50%;
           animation: spin 0.7s linear infinite;
         }
         @keyframes spin { to { transform: rotate(360deg); } }
+
         .tag {
           display: inline-block;
           font-size: 10px;
@@ -319,51 +331,80 @@ setOutput(data.text);
           background: #1A1A28;
           color: #5A5A80;
         }
-        .icon-bg {
-          display: inline-flex;
+
+        .hamburger {
+          display: none;
           align-items: center;
           justify-content: center;
-          width: 32px;
-          height: 32px;
-          border-radius: 3px;
-          font-size: 16px;
-          background: rgba(255,255,255,0.04);
+          width: 36px; height: 36px;
+          background: #1A1A28;
+          border: 1px solid #2A2A40;
+          border-radius: 4px;
+          cursor: pointer;
+          color: #A0A0C0;
+          font-size: 18px;
           flex-shrink: 0;
         }
+
+        .mobile-engine-label {
+          display: none;
+          font-size: 12px;
+          color: #5A5A75;
+          letter-spacing: 0.05em;
+        }
+        @media (max-width: 768px) {
+          .mobile-engine-label { display: block; }
+        }
+
+        .overlay {
+          display: none;
+          position: fixed;
+          inset: 0;
+          background: rgba(0,0,0,0.6);
+          z-index: 99;
+        }
+        .overlay.open { display: block; }
       `}</style>
 
       {/* Header */}
       <div style={{
         borderBottom: "1px solid #141420",
-        padding: "20px 32px",
+        padding: "12px 16px",
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
         background: "#080810",
+        position: "sticky",
+        top: 0,
+        zIndex: 50,
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-          <div style={{ fontFamily: "'Syne', sans-serif", fontSize: "22px", fontWeight: 800, letterSpacing: "-0.02em", color: "#fff" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <button className="hamburger" onClick={() => setSidebarOpen(!sidebarOpen)}>
+            {sidebarOpen ? "✕" : "☰"}
+          </button>
+          <div style={{ fontFamily: "'Syne', sans-serif", fontSize: "20px", fontWeight: 800, letterSpacing: "-0.02em", color: "#fff" }}>
             SCRYP
           </div>
-          <div style={{ width: "1px", height: "20px", background: "#2A2A3A" }} />
-          <div style={{ color: "#5A5A70", fontSize: "13px", letterSpacing: "0.05em" }}>PROMPT ENGINES</div>
+          <div style={{ width: "1px", height: "18px", background: "#2A2A3A" }} />
+          <div style={{ color: "#5A5A70", fontSize: "12px", letterSpacing: "0.05em" }}>PROMPT ENGINES</div>
         </div>
-        <div style={{ display: "flex", gap: "8px" }}>
-          {["SALES", "OPS", "CAMPAIGNS"].map(t => (
-            <div key={t} className="tag">{t}</div>
-          ))}
+        <div className="header-tags" style={{ display: "flex", gap: "6px" }}>
+          {["SALES", "OPS", "CAMPAIGNS"].map(t => <div key={t} className="tag">{t}</div>)}
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "280px 1fr", height: "calc(100vh - 65px)" }}>
+      {/* Overlay for mobile */}
+      <div className={`overlay ${sidebarOpen ? "open" : ""}`} onClick={() => setSidebarOpen(false)} />
+
+      <div className="layout">
         {/* Sidebar */}
-        <div style={{
+        <div className={`sidebar ${sidebarOpen ? "open" : ""}`} style={{
           borderRight: "1px solid #141420",
-          padding: "24px 16px",
-          overflowY: "auto",
+          padding: "20px 12px",
           background: "#080810",
+          overflowY: "auto",
         }}>
-          <div style={{ fontSize: "10px", letterSpacing: "0.15em", color: "#3A3A55", marginBottom: "16px", paddingLeft: "8px" }}>
+          <div style={{ fontSize: "10px", letterSpacing: "0.15em", color: "#3A3A55", marginBottom: "14px", paddingLeft: "6px" }}>
             SELECT ENGINE
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
@@ -374,19 +415,18 @@ setOutput(data.text);
                 style={{ "--accent": eng.color }}
                 onClick={() => handleSelect(eng.id)}
               >
-                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "6px" }}>
-                  <div className="icon-bg" style={{ color: eng.color }}>{eng.icon}</div>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "5px" }}>
                   <div style={{
-                    fontFamily: "'Syne', sans-serif",
-                    fontSize: "13px",
-                    fontWeight: 700,
-                    color: activeEngine === eng.id ? eng.color : "#C0C0D0",
-                    letterSpacing: "0.02em",
-                  }}>
-                    {eng.label}
-                  </div>
+                    display: "inline-flex", alignItems: "center", justifyContent: "center",
+                    width: "28px", height: "28px", borderRadius: "3px",
+                    background: "rgba(255,255,255,0.04)", color: eng.color, fontSize: "15px", flexShrink: 0,
+                  }}>{eng.icon}</div>
+                  <div style={{
+                    fontFamily: "'Syne', sans-serif", fontSize: "13px", fontWeight: 700,
+                    color: activeEngine === eng.id ? eng.color : "#C0C0D0", letterSpacing: "0.02em",
+                  }}>{eng.label}</div>
                 </div>
-                <div style={{ fontSize: "11px", color: "#4A4A65", lineHeight: 1.5, paddingLeft: "42px" }}>
+                <div style={{ fontSize: "11px", color: "#4A4A65", lineHeight: 1.5, paddingLeft: "38px" }}>
                   {eng.description}
                 </div>
               </div>
@@ -395,62 +435,41 @@ setOutput(data.text);
         </div>
 
         {/* Main Panel */}
-        <div style={{ overflowY: "auto", padding: "32px 40px" }}>
+        <div className="main-panel" style={{ overflowY: "auto", padding: "28px 32px" }}>
           {!engine ? (
             <div style={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              height: "100%",
-              gap: "12px",
-              color: "#2A2A40",
-              textAlign: "center",
+              display: "flex", flexDirection: "column", alignItems: "center",
+              justifyContent: "center", minHeight: "60vh", gap: "12px",
+              color: "#2A2A40", textAlign: "center",
             }}>
-              <div style={{ fontSize: "48px" }}>◈</div>
-              <div style={{ fontFamily: "'Syne', sans-serif", fontSize: "18px", fontWeight: 700, color: "#3A3A55" }}>
+              <div style={{ fontSize: "40px" }}>◈</div>
+              <div style={{ fontFamily: "'Syne', sans-serif", fontSize: "16px", fontWeight: 700, color: "#3A3A55" }}>
                 Select an engine to begin
               </div>
-              <div style={{ fontSize: "13px", color: "#2A2A40" }}>
-                Choose a prompt engine from the sidebar
+              <div style={{ fontSize: "12px", color: "#2A2A40" }}>
+                Tap the menu icon to choose a prompt engine
               </div>
             </div>
           ) : (
-            <div style={{ maxWidth: "680px" }} key={engine.id}>
+            <div className="engine-form" style={{ maxWidth: "640px" }} key={engine.id}>
               {/* Engine Header */}
-              <div style={{ marginBottom: "32px" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "8px" }}>
-                  <div style={{
-                    width: "8px", height: "8px", borderRadius: "50%",
-                    background: engine.color,
-                    boxShadow: `0 0 8px ${engine.color}`,
-                  }} />
-                  <div style={{
-                    fontFamily: "'Syne', sans-serif",
-                    fontSize: "24px",
-                    fontWeight: 800,
-                    color: "#fff",
-                    letterSpacing: "-0.02em",
-                  }}>
+              <div style={{ marginBottom: "28px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "6px" }}>
+                  <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: engine.color, boxShadow: `0 0 8px ${engine.color}` }} />
+                  <div style={{ fontFamily: "'Syne', sans-serif", fontSize: "clamp(18px, 5vw, 24px)", fontWeight: 800, color: "#fff", letterSpacing: "-0.02em" }}>
                     {engine.label}
                   </div>
                 </div>
-                <div style={{ fontSize: "13px", color: "#5A5A75", paddingLeft: "20px" }}>
+                <div style={{ fontSize: "12px", color: "#5A5A75", paddingLeft: "17px" }}>
                   {engine.description}
                 </div>
               </div>
 
               {/* Fields */}
-              <div style={{ display: "flex", flexDirection: "column", gap: "20px", marginBottom: "28px" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "18px", marginBottom: "24px" }}>
                 {engine.fields.map((field) => (
                   <div key={field.key}>
-                    <div style={{
-                      fontSize: "11px",
-                      letterSpacing: "0.1em",
-                      color: "#5A5A75",
-                      marginBottom: "8px",
-                      textTransform: "uppercase",
-                    }}>
+                    <div style={{ fontSize: "11px", letterSpacing: "0.1em", color: "#5A5A75", marginBottom: "7px", textTransform: "uppercase" }}>
                       {field.label}
                     </div>
                     {field.type === "select" ? (
@@ -477,34 +496,21 @@ setOutput(data.text);
               </div>
 
               {/* Prompt Preview */}
-              <details style={{ marginBottom: "24px" }}>
-                <summary style={{
-                  fontSize: "11px",
-                  letterSpacing: "0.1em",
-                  color: "#3A3A55",
-                  textTransform: "uppercase",
-                  cursor: "pointer",
-                  userSelect: "none",
-                }}>
+              <details style={{ marginBottom: "20px" }}>
+                <summary style={{ fontSize: "11px", letterSpacing: "0.1em", color: "#3A3A55", textTransform: "uppercase", cursor: "pointer", userSelect: "none" }}>
                   View Prompt
                 </summary>
                 <div style={{
-                  marginTop: "12px",
-                  background: "#06060E",
-                  border: "1px dashed #1A1A2E",
-                  borderRadius: "3px",
-                  padding: "16px",
-                  fontSize: "12px",
-                  color: "#3A3A55",
-                  whiteSpace: "pre-wrap",
-                  lineHeight: 1.65,
+                  marginTop: "10px", background: "#06060E", border: "1px dashed #1A1A2E",
+                  borderRadius: "3px", padding: "14px", fontSize: "12px", color: "#3A3A55",
+                  whiteSpace: "pre-wrap", lineHeight: 1.65, wordBreak: "break-word",
                 }}>
                   {engine.prompt(fields)}
                 </div>
               </details>
 
               {/* Generate */}
-              <div style={{ display: "flex", alignItems: "center", gap: "16px", marginBottom: "28px" }}>
+              <div style={{ marginBottom: "24px" }}>
                 <button
                   className="generate-btn"
                   style={{ "--accent": engine.color }}
@@ -512,7 +518,7 @@ setOutput(data.text);
                   disabled={loading}
                 >
                   {loading ? (
-                    <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}>
                       <span className="loader" style={{ "--accent": engine.color }} />
                       GENERATING...
                     </span>
@@ -523,36 +529,21 @@ setOutput(data.text);
               {/* Output */}
               {(output || loading) && (
                 <div>
-                  <div style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    marginBottom: "10px",
-                  }}>
-                    <div style={{ fontSize: "11px", letterSpacing: "0.1em", color: "#5A5A75", textTransform: "uppercase" }}>
-                      Output
-                    </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+                    <div style={{ fontSize: "11px", letterSpacing: "0.1em", color: "#5A5A75", textTransform: "uppercase" }}>Output</div>
                     {output && (
-                      <button
-                        onClick={handleCopy}
-                        style={{
-                          background: "none",
-                          border: "1px solid #2A2A40",
-                          color: copied ? engine.color : "#5A5A75",
-                          padding: "4px 12px",
-                          borderRadius: "2px",
-                          fontSize: "11px",
-                          letterSpacing: "0.08em",
-                          cursor: "pointer",
-                          fontFamily: "'DM Mono', monospace",
-                          transition: "color 0.15s",
-                        }}
-                      >
+                      <button onClick={handleCopy} style={{
+                        background: "none", border: "1px solid #2A2A40",
+                        color: copied ? engine.color : "#5A5A75",
+                        padding: "4px 12px", borderRadius: "2px", fontSize: "11px",
+                        letterSpacing: "0.08em", cursor: "pointer",
+                        fontFamily: "'DM Mono', monospace", transition: "color 0.15s",
+                      }}>
                         {copied ? "COPIED ✓" : "COPY"}
                       </button>
                     )}
                   </div>
-                  <div className="output-box" ref={outputRef}>
+                  <div className="output-box">
                     {loading && !output ? (
                       <div style={{ display: "flex", alignItems: "center", gap: "10px", color: "#3A3A55" }}>
                         <span className="loader" />
