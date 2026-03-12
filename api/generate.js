@@ -17,7 +17,7 @@ export default async function handler(req, res) {
 
       while (keepFetching) {
         const raygunRes = await fetch(
-          `https://api.raygun.com/v3/applications/19hynx5/error-groups?count=${pageSize}&offset=${offset}&sortBy=lastOccurredAt&sortOrder=desc`,
+          `https://api.raygun.com/v3/applications/19hynx5/error-groups?count=${pageSize}&offset=${offset}&sortBy=lastOccurredAt&sortOrder=desc&status=active`,
           {
             headers: {
               Authorization: `Bearer ${process.env.RAYGUN_TOKEN}`,
@@ -37,12 +37,11 @@ export default async function handler(req, res) {
         allErrors.push(...page);
         offset += pageSize;
         if (page.length < pageSize) keepFetching = false;
-        if (allErrors.length >= 500) keepFetching = false;
+        if (allErrors.length >= 5000) keepFetching = false;
       }
 
       // Return active errors, sorted by lastOccurredAt desc
       const errors = allErrors
-        .filter(e => e.status === "active")
         .sort((a, b) => new Date(b.lastOccurredAt) - new Date(a.lastOccurredAt));
       return res.status(200).json({ errors });
     } catch (e) {
