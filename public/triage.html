@@ -208,6 +208,20 @@
 
   const SECTION_ICONS = { 'What Happened': '💥', 'Business Impact': '📊', 'Root Cause': '🔬', 'Dev Recommendation': '🛠️' };
 
+  // Ticket tracking - persists across refreshes
+  const TICKET_STORE_KEY = 'cco_triage_tickets';
+  function getTicketMap() {
+    try { return JSON.parse(localStorage.getItem(TICKET_STORE_KEY) || '{}'); } catch { return {}; }
+  }
+  function saveTicket(errorIdentifier, ticketKey) {
+    const map = getTicketMap();
+    map[errorIdentifier] = ticketKey;
+    localStorage.setItem(TICKET_STORE_KEY, JSON.stringify(map));
+  }
+  function getTicketForError(errorIdentifier) {
+    return getTicketMap()[errorIdentifier] || null;
+  }
+
   let allErrors = [], filteredErrors = [], selectedError = null, currentAnalysis = null, currentJiraDraft = null, activeTab = 'analysis';
 
   function escHtml(s) {
@@ -319,6 +333,7 @@
         <div class="error-msg">${escHtml(msg)}</div>
         <div class="error-meta-row">
           <span>First seen: ${timeAgo(err.createdAt)}</span>
+          ${getTicketForError(err.identifier) ? `<span style="margin-left:4px"><a href="https://softwise.atlassian.net/browse/${getTicketForError(err.identifier)}" target="_blank" style="color:#2563eb;font-weight:600;font-size:10px;background:#eff6ff;padding:1px 6px;border-radius:4px;border:1px solid #bfdbfe;text-decoration:none">🎫 ${getTicketForError(err.identifier)}</a></span>` : ''}
         </div>
       </div>`;
     }).join('');
@@ -336,7 +351,10 @@
         <div class="stat-chip"><span class="stat-label">First Seen</span><span class="stat-value">${timeAgo(selectedError.createdAt)}</span></div>
 
       </div>
-      ${selectedError.applicationUrl ? `<a href="${selectedError.applicationUrl}" target="_blank" class="raygun-link">↗ View in Raygun</a>` : ''}
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+        ${selectedError.applicationUrl ? `<a href="${selectedError.applicationUrl}" target="_blank" class="raygun-link">↗ View in Raygun</a>` : ''}
+        ${getTicketForError(selectedError.identifier) ? `<a href="https://softwise.atlassian.net/browse/${getTicketForError(selectedError.identifier)}" target="_blank" style="font-size:12px;color:#2563eb;font-weight:600;text-decoration:none">🎫 ${getTicketForError(selectedError.identifier)} — View in Jira →</a>` : ''}
+      </div>
     </div>`;
   }
 
@@ -444,6 +462,11 @@
       if (data.error) throw new Error(data.error);
       const key = data.key || 'Ticket';
       const url = data.key ? `https://softwise.atlassian.net/browse/${data.key}` : null;
+      // Save ticket association to error
+      if (data.key && selectedError) {
+        saveTicket(selectedError.identifier, data.key);
+        applyFilters(); // re-render list to show ticket badge
+      }
       document.getElementById('jiraResult').innerHTML = `<div class="result-msg success">✅ <strong>${key}</strong> created in ${JIRA_PROJECT} and assigned to you${url ? ` — <a href="${url}" target="_blank">View in Jira →</a>` : ''}</div>`;
       btn.className = 'jira-btn success'; btn.textContent = `✓ ${key} Created`;
     } catch(e) {
