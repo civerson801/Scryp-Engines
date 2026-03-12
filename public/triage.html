@@ -345,9 +345,7 @@
         sections: {
           summary: data.analysis.summary,
           stepsToReproduce: data.analysis.stepsToReproduce,
-          expectedBehavior: data.analysis.expectedBehavior,
-          actualBehavior: data.analysis.actualBehavior,
-          impact: data.analysis.impact,
+          environment: data.analysis.environment,
           technicalDetails: data.analysis.technicalDetails,
         }
       };
@@ -390,12 +388,9 @@
     } else {
       const s = currentJiraDraft?.sections || {};
       const sectionOrder = [
-        ['Summary', s.summary],
-        ['Steps to Reproduce', s.stepsToReproduce],
-        ['Expected Behavior', s.expectedBehavior],
-        ['Actual Behavior', s.actualBehavior],
-        ['Impact', s.impact],
-        ['Technical Details', s.technicalDetails],
+        ['Description', s.summary + (s.technicalDetails ? '\n\n' + s.technicalDetails : '')],
+        ['Reproduction Steps', s.stepsToReproduce],
+        ['Environment', s.environment],
       ];
       const sectionsHtml = sectionOrder.map(([label, val]) => `
         <div style="margin-bottom:14px">
