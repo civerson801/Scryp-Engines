@@ -6,20 +6,16 @@ export default async function handler(req, res) {
   if (req.method === "OPTIONS") return res.status(200).end();
  
   const RAYGUN_TOKEN = process.env.RAYGUN_TOKEN;
- 
-  if (!RAYGUN_TOKEN) {
-    return res.status(500).json({ error: "RAYGUN_TOKEN not configured" });
-  }
+  if (!RAYGUN_TOKEN) return res.status(500).json({ error: "RAYGUN_TOKEN not configured" });
  
   try {
     const { path, ...rest } = req.query;
+    if (!path) return res.status(400).json({ error: "Missing path parameter" });
  
-    if (!path) {
-      return res.status(400).json({ error: "Missing path parameter" });
-    }
- 
+    // Build query string from remaining params, attach with ? 
     const extraParams = new URLSearchParams(rest).toString();
-    const raygunUrl = `https://api.raygun.com/${path}${extraParams ? "&" + extraParams : ""}`;
+    const separator = path.includes("?") ? "&" : "?";
+    const raygunUrl = `https://api.raygun.com/${path}${extraParams ? separator + extraParams : ""}`;
  
     const raygunRes = await fetch(raygunUrl, {
       headers: {
@@ -29,8 +25,6 @@ export default async function handler(req, res) {
     });
  
     const text = await raygunRes.text();
- 
-    // Return raw text if not JSON so we can see what Raygun is actually sending back
     try {
       const data = JSON.parse(text);
       return res.status(raygunRes.status).json(data);
