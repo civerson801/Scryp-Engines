@@ -4,212 +4,209 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>CCO Error Triage</title>
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&family=Bebas+Neue&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
-    :root {
-      --bg: #080810;
-      --surface: #0d0d1a;
-      --border: #16162a;
-      --border2: #1e1e35;
-      --text: #c8c8e0;
-      --muted: #44445a;
-      --muted2: #2a2a42;
-      --accent: #4d7cff;
-      --p1: #ff3333;
-      --p2: #ff8800;
-      --p3: #f0c020;
-      --p4: #33bb66;
-      --font-mono: 'IBM Plex Mono', monospace;
-      --font-display: 'Bebas Neue', sans-serif;
-    }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--font-mono); font-size: 13px; }
-
-    /* Scanline overlay */
-    body::before {
-      content: '';
-      position: fixed; inset: 0; pointer-events: none; z-index: 9999;
-      background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px);
+    :root {
+      --bg: #f5f5f7;
+      --white: #ffffff;
+      --border: #e2e2e7;
+      --text-primary: #1a1a2e;
+      --text-secondary: #6b6b80;
+      --text-muted: #9999aa;
+      --accent: #2563eb;
+      --accent-light: #eff6ff;
+      --p1: #dc2626; --p1-bg: #fef2f2; --p1-border: #fecaca;
+      --p2: #ea580c; --p2-bg: #fff7ed; --p2-border: #fed7aa;
+      --p3: #ca8a04; --p3-bg: #fefce8; --p3-border: #fde68a;
+      --p4: #16a34a; --p4-bg: #f0fdf4; --p4-border: #bbf7d0;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+      --shadow: 0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
     }
+    html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text-primary); font-size: 14px; }
 
-    .app { display: grid; grid-template-rows: 52px 1fr; height: 100vh; }
+    .app { display: grid; grid-template-rows: 60px 1fr; height: 100vh; }
 
     /* Header */
     header {
+      background: var(--white); border-bottom: 1px solid var(--border);
       display: flex; align-items: center; justify-content: space-between;
-      padding: 0 24px; border-bottom: 1px solid var(--border2);
-      background: var(--bg);
+      padding: 0 24px; box-shadow: var(--shadow-sm);
     }
-    .header-left { display: flex; align-items: center; gap: 16px; }
-    .logo { font-family: var(--font-display); font-size: 22px; letter-spacing: 2px; color: #fff; }
-    .badge { font-size: 9px; color: var(--muted); background: var(--surface); border: 1px solid var(--border2); padding: 2px 8px; border-radius: 3px; letter-spacing: 1px; text-transform: uppercase; }
-    .dots { display: flex; gap: 5px; }
-    .dot { width: 8px; height: 8px; border-radius: 50%; }
+    .header-left { display: flex; align-items: center; gap: 12px; }
+    .logo { font-size: 16px; font-weight: 700; color: var(--text-primary); letter-spacing: -0.3px; }
+    .logo span { color: var(--accent); }
+    .badge-group { display: flex; gap: 6px; }
+    .badge {
+      font-size: 11px; font-weight: 500; padding: 3px 8px; border-radius: 20px;
+      background: var(--accent-light); color: var(--accent); letter-spacing: 0.2px;
+    }
+    .header-right { display: flex; align-items: center; gap: 12px; }
+    .sync-time { font-size: 12px; color: var(--text-muted); }
     .sync-btn {
-      background: var(--surface); border: 1px solid var(--border2); color: var(--muted);
-      padding: 5px 14px; border-radius: 4px; cursor: pointer; font-family: var(--font-mono);
-      font-size: 11px; transition: all 0.15s; letter-spacing: 0.5px;
+      background: var(--white); border: 1px solid var(--border); color: var(--text-secondary);
+      padding: 7px 16px; border-radius: 8px; cursor: pointer; font-family: 'Inter', sans-serif;
+      font-size: 13px; font-weight: 500; transition: all 0.15s; display: flex; align-items: center; gap: 6px;
     }
-    .sync-btn:hover { border-color: var(--accent); color: var(--accent); }
-    .sync-time { font-size: 10px; color: var(--muted2); }
+    .sync-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-light); }
 
-    /* Main layout */
-    main { display: grid; grid-template-columns: 320px 1fr; overflow: hidden; }
+    /* Main */
+    main { display: grid; grid-template-columns: 360px 1fr; overflow: hidden; }
 
-    /* Error list */
-    .error-list { border-right: 1px solid var(--border); overflow-y: auto; }
+    /* Left panel */
+    .left-panel { background: var(--white); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
     .list-header {
+      padding: 16px 20px 12px; border-bottom: 1px solid var(--border);
       display: flex; justify-content: space-between; align-items: center;
-      padding: 10px 14px; border-bottom: 1px solid var(--border);
-      position: sticky; top: 0; background: var(--bg); z-index: 10;
     }
-    .list-label { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 2px; }
-    .list-count { font-size: 10px; color: var(--muted2); }
-
+    .list-title { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+    .list-count {
+      font-size: 12px; font-weight: 500; background: var(--bg); color: var(--text-secondary);
+      padding: 2px 8px; border-radius: 12px; border: 1px solid var(--border);
+    }
+    .error-list { overflow-y: auto; flex: 1; }
     .error-item {
-      padding: 12px 14px; border-bottom: 1px solid var(--border);
-      cursor: pointer; border-left: 3px solid transparent; transition: all 0.1s;
+      padding: 14px 20px; border-bottom: 1px solid var(--border);
+      cursor: pointer; transition: all 0.1s; border-left: 3px solid transparent;
     }
-    .error-item:hover { background: rgba(77,124,255,0.04); }
-    .error-item.selected { background: #0d0d20; border-left-color: var(--accent); }
-    .error-item-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
-    .priority-chip {
-      font-size: 9px; font-weight: 600; padding: 1px 7px; border-radius: 3px;
-      letter-spacing: 0.5px; text-transform: uppercase;
+    .error-item:hover { background: #fafafa; }
+    .error-item.selected { background: var(--accent-light); border-left-color: var(--accent); }
+    .error-item-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+    .priority-pill {
+      font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 20px;
+      letter-spacing: 0.3px; border: 1px solid;
     }
-    .error-status { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
-    .error-msg { font-size: 11px; color: #888; line-height: 1.5; margin-bottom: 4px; word-break: break-word; }
-    .error-item.selected .error-msg { color: #bbb; }
-    .error-date { font-size: 10px; color: var(--muted2); }
+    .error-msg { font-size: 13px; color: var(--text-primary); line-height: 1.5; margin-bottom: 5px; word-break: break-word; }
+    .error-item.selected .error-msg { color: var(--accent); }
+    .error-meta { display: flex; gap: 10px; font-size: 11px; color: var(--text-muted); }
 
-    /* Analysis panel */
-    .analysis-panel { overflow-y: auto; background: #090915; }
+    /* Right panel */
+    .right-panel { overflow-y: auto; background: var(--bg); }
     .empty-state {
       height: 100%; display: flex; flex-direction: column;
-      align-items: center; justify-content: center; gap: 10px; color: var(--muted2);
+      align-items: center; justify-content: center; gap: 12px;
     }
-    .empty-icon { font-size: 40px; opacity: 0.2; }
-    .empty-text { font-size: 11px; letter-spacing: 1px; }
+    .empty-icon { font-size: 48px; opacity: 0.2; }
+    .empty-title { font-size: 16px; font-weight: 600; color: var(--text-secondary); }
+    .empty-sub { font-size: 13px; color: var(--text-muted); }
 
-    .panel-inner { padding: 24px; }
+    .panel-inner { padding: 24px; max-width: 800px; }
 
     /* Error header card */
     .error-card {
-      background: var(--surface); border: 1px solid var(--border2);
-      border-radius: 6px; padding: 14px; margin-bottom: 20px;
+      background: var(--white); border: 1px solid var(--border); border-radius: 12px;
+      padding: 20px; margin-bottom: 20px; box-shadow: var(--shadow-sm);
     }
-    .error-card-msg { font-size: 12px; color: #ccc; line-height: 1.6; margin-bottom: 8px; }
-    .error-card-meta { display: flex; gap: 14px; flex-wrap: wrap; font-size: 10px; color: var(--muted); }
-    .error-card-meta span em { color: #666; font-style: normal; }
+    .error-card-msg { font-size: 15px; font-weight: 600; color: var(--text-primary); line-height: 1.5; margin-bottom: 10px; }
+    .error-card-meta { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: var(--text-muted); }
+    .error-card-meta span { display: flex; align-items: center; gap: 4px; }
+    .error-card-meta strong { color: var(--text-secondary); font-weight: 500; }
 
     /* Tabs */
-    .tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
+    .tabs { display: flex; gap: 4px; margin-bottom: 20px; background: var(--white); border: 1px solid var(--border); border-radius: 10px; padding: 4px; box-shadow: var(--shadow-sm); width: fit-content; }
     .tab-btn {
-      background: none; border: none; border-bottom: 2px solid transparent;
-      color: var(--muted); padding: 8px 18px; cursor: pointer;
-      font-family: var(--font-mono); font-size: 10px; text-transform: uppercase;
-      letter-spacing: 1.5px; transition: all 0.12s;
+      background: none; border: none; border-radius: 7px;
+      color: var(--text-muted); padding: 7px 18px; cursor: pointer;
+      font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 500;
+      transition: all 0.15s;
     }
-    .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .tab-btn.active { background: var(--accent); color: #fff; box-shadow: 0 1px 3px rgba(37,99,235,0.3); }
+    .tab-btn:not(.active):hover { color: var(--text-primary); background: var(--bg); }
 
     /* Spinner */
-    .spinner-wrap { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; padding: 20px 0; }
-    .spinner {
-      width: 14px; height: 14px; border: 2px solid var(--border2);
-      border-top-color: var(--accent); border-radius: 50%;
-      animation: spin 0.7s linear infinite;
-    }
+    .spinner-wrap { display: flex; align-items: center; gap: 10px; color: var(--text-muted); font-size: 14px; padding: 32px 0; }
+    .spinner { width: 18px; height: 18px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* Analysis content */
-    .priority-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
-    .priority-badge { padding: 4px 14px; border-radius: 4px; font-size: 11px; font-weight: 600; letter-spacing: 1px; }
-    .priority-reason { font-size: 11px; color: var(--muted); font-style: italic; }
+    /* Priority banner */
+    .priority-banner {
+      display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+      padding: 14px 18px; border-radius: 10px; margin-bottom: 16px;
+      border: 1px solid;
+    }
+    .priority-badge { font-size: 13px; font-weight: 700; letter-spacing: 0.5px; }
+    .priority-reason { font-size: 13px; opacity: 0.85; }
 
+    /* Analysis cards */
+    .analysis-grid { display: grid; gap: 12px; margin-bottom: 16px; }
     .analysis-card {
-      background: var(--surface); border: 1px solid var(--border2);
-      border-radius: 6px; padding: 14px; margin-bottom: 12px;
-      border-left: 3px solid var(--accent);
+      background: var(--white); border: 1px solid var(--border); border-radius: 10px;
+      padding: 16px; box-shadow: var(--shadow-sm);
     }
-    .analysis-label { font-size: 9px; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 8px; }
-    .analysis-value { font-size: 12px; color: #aaa; line-height: 1.7; }
+    .analysis-label {
+      font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px;
+      color: var(--text-muted); margin-bottom: 8px;
+    }
+    .analysis-value { font-size: 14px; color: var(--text-primary); line-height: 1.65; }
 
-    .action-btn {
-      background: #0a1630; border: 1px solid #1a3a6a; color: var(--accent);
-      padding: 9px 18px; border-radius: 5px; cursor: pointer;
-      font-family: var(--font-mono); font-size: 11px; margin-top: 4px;
-      transition: all 0.15s; letter-spacing: 0.5px;
+    .view-jira-btn {
+      background: var(--accent); color: #fff; border: none; border-radius: 8px;
+      padding: 10px 20px; cursor: pointer; font-family: 'Inter', sans-serif;
+      font-size: 13px; font-weight: 600; transition: all 0.15s;
     }
-    .action-btn:hover { background: #0d1f40; }
+    .view-jira-btn:hover { background: #1d4ed8; }
 
     /* Jira panel */
-    .jira-card { background: var(--surface); border: 1px solid var(--border2); border-radius: 6px; padding: 14px; margin-bottom: 12px; }
-    .jira-label { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 8px; }
-    .jira-title-text { font-size: 13px; color: #e2e2ee; font-weight: 500; line-height: 1.4; }
-    .jira-desc { font-size: 11px; color: #888; line-height: 1.8; white-space: pre-wrap; font-family: var(--font-mono); }
+    .jira-section { display: flex; flex-direction: column; gap: 14px; }
+    .jira-field { background: var(--white); border: 1px solid var(--border); border-radius: 10px; padding: 16px; box-shadow: var(--shadow-sm); }
+    .jira-field-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-muted); margin-bottom: 8px; }
+    .jira-title-text { font-size: 15px; font-weight: 600; color: var(--text-primary); line-height: 1.4; }
+    .jira-desc { font-size: 13px; color: var(--text-secondary); line-height: 1.8; white-space: pre-wrap; font-family: 'Inter', sans-serif; }
+
+    .result-msg { padding: 12px 16px; border-radius: 8px; font-size: 13px; font-weight: 500; }
+    .result-msg.success { background: #f0fdf4; border: 1px solid #bbf7d0; color: #16a34a; }
+    .result-msg.error { background: #fef2f2; border: 1px solid #fecaca; color: #dc2626; }
 
     .jira-btn {
-      background: #0047cc; border: 1px solid #0047cc; color: #fff;
-      padding: 11px 22px; border-radius: 5px; cursor: pointer;
-      font-family: var(--font-mono); font-size: 12px; font-weight: 500;
-      transition: all 0.15s; letter-spacing: 0.5px;
+      background: #0052cc; color: #fff; border: none; border-radius: 8px;
+      padding: 12px 24px; cursor: pointer; font-family: 'Inter', sans-serif;
+      font-size: 14px; font-weight: 600; transition: all 0.15s; display: flex; align-items: center; gap: 8px; width: fit-content;
     }
-    .jira-btn:hover { background: #0055ee; }
-    .jira-btn:disabled { background: #0d1a2e; border-color: #0d1a2e; color: #446; cursor: not-allowed; }
-    .jira-btn.success { background: #0a160a; border-color: #2a4a2a; color: #4caf50; cursor: default; }
+    .jira-btn:hover { background: #0047b3; }
+    .jira-btn:disabled { background: #e2e8f0; color: #94a3b8; cursor: not-allowed; }
+    .jira-btn.success { background: #f0fdf4; border: 1px solid #bbf7d0; color: #16a34a; cursor: default; }
 
-    .result-msg {
-      padding: 10px 14px; border-radius: 5px; font-size: 12px; margin-bottom: 12px;
-    }
-    .result-msg.success { background: #0a160a; border: 1px solid #2a4a2a; color: #4caf50; }
-    .result-msg.error { background: #160a0a; border: 1px solid #4a2a2a; color: #ff6b6b; }
+    .fetch-error { margin: 16px; padding: 14px 16px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; font-size: 13px; color: #dc2626; line-height: 1.5; }
+    .loading-state { padding: 40px; text-align: center; color: var(--text-muted); font-size: 13px; }
 
-    .fetch-error {
-      margin: 12px; padding: 12px; background: #180808;
-      border: 1px solid rgba(255,50,50,0.15); border-radius: 5px;
-      font-size: 11px; color: #ff6666; line-height: 1.5;
-    }
-    .loading-state { padding: 32px; text-align: center; color: var(--muted2); font-size: 11px; }
-
-    /* Scrollbar */
-    ::-webkit-scrollbar { width: 3px; }
+    ::-webkit-scrollbar { width: 4px; }
     ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
   </style>
 </head>
 <body>
 <div class="app">
   <header>
     <div class="header-left">
-      <div class="dots">
-        <div class="dot" style="background:#ff3b3b;box-shadow:0 0 6px #ff3b3b88"></div>
-        <div class="dot" style="background:#ff8800;box-shadow:0 0 6px #ff880088"></div>
-        <div class="dot" style="background:#33bb66;box-shadow:0 0 6px #33bb6688"></div>
+      <div class="logo">Error <span>Triage</span></div>
+      <div class="badge-group">
+        <span class="badge">CCO</span>
+        <span class="badge">checkcity.com</span>
+        <span class="badge">TDG</span>
       </div>
-      <span class="logo">ERROR TRIAGE</span>
-      <span class="badge">CCO · checkcity.com · TDG</span>
     </div>
-    <div style="display:flex;align-items:center;gap:12px">
+    <div class="header-right">
       <span class="sync-time" id="syncTime"></span>
-      <button class="sync-btn" id="syncBtn" onclick="fetchErrors()">↻ sync</button>
+      <button class="sync-btn" id="syncBtn" onclick="fetchErrors()">↻ Refresh</button>
     </div>
   </header>
 
   <main>
-    <div class="error-list">
+    <div class="left-panel">
       <div class="list-header">
-        <span class="list-label">Error Groups</span>
+        <span class="list-title">Active Errors</span>
         <span class="list-count" id="errorCount">—</span>
       </div>
-      <div id="errorListBody">
-        <div class="loading-state">connecting to raygun...</div>
+      <div class="error-list" id="errorListBody">
+        <div class="loading-state">Loading errors from Raygun...</div>
       </div>
     </div>
 
-    <div class="analysis-panel" id="analysisPanel">
+    <div class="right-panel" id="analysisPanel">
       <div class="empty-state">
-        <div class="empty-icon">⬡</div>
-        <div class="empty-text">select an error to analyze</div>
+        <div class="empty-icon">🔍</div>
+        <div class="empty-title">Select an error to analyze</div>
+        <div class="empty-sub">AI will explain the issue and draft a Jira ticket</div>
       </div>
     </div>
   </main>
@@ -219,231 +216,177 @@
   const API = '/api/generate';
   const JIRA_PROJECT = 'TDG';
 
-  const PRIORITY = {
-    active:             { color: '--p2', label: 'P2 · HIGH',     bg: '#ff8800' },
-    new:                { color: '--p1', label: 'P1 · CRITICAL', bg: '#ff3333' },
-    resolved:           { color: '--p4', label: 'P4 · LOW',      bg: '#33bb66' },
-    permanentlyIgnored: { color: '--p4', label: 'P4 · IGNORED',  bg: '#33bb66' },
-    ignored:            { color: '--p3', label: 'P3 · MEDIUM',   bg: '#f0c020' },
+  const PRIORITIES = {
+    critical: { label: 'P1 · Critical', color: '#dc2626', bg: '#fef2f2', border: '#fecaca' },
+    high:     { label: 'P2 · High',     color: '#ea580c', bg: '#fff7ed', border: '#fed7aa' },
+    medium:   { label: 'P3 · Medium',   color: '#ca8a04', bg: '#fefce8', border: '#fde68a' },
+    low:      { label: 'P4 · Low',      color: '#16a34a', bg: '#f0fdf4', border: '#bbf7d0' },
   };
 
-  const ACCENT_COLORS = ['#4d7cff', '#ff8800', '#a855f7', '#33bb66'];
+  const STATUS_PRIORITY = {
+    active: 'high', new: 'critical', resolved: 'low',
+    permanentlyIgnored: 'low', ignored: 'medium',
+  };
 
-  let allErrors = [];
-  let selectedError = null;
-  let currentAnalysis = null;
-  let currentJiraDraft = null;
-  let activeTab = 'analysis';
+  let allErrors = [], selectedError = null, currentAnalysis = null, currentJiraDraft = null, activeTab = 'analysis';
 
   function getPriority(err) {
-    return PRIORITY[err.status] || { label: 'P3 · MEDIUM', bg: '#f0c020' };
+    return PRIORITIES[STATUS_PRIORITY[err.status]] || PRIORITIES.medium;
+  }
+
+  function escHtml(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function timeAgo(dateStr) {
+    if (!dateStr) return '—';
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const days = Math.floor(diff / 86400000);
+    if (days === 0) return 'Today';
+    if (days === 1) return 'Yesterday';
+    if (days < 30) return `${days}d ago`;
+    if (days < 365) return `${Math.floor(days/30)}mo ago`;
+    return `${Math.floor(days/365)}y ago`;
   }
 
   async function fetchErrors() {
     const btn = document.getElementById('syncBtn');
-    btn.textContent = '···';
-    btn.disabled = true;
-    document.getElementById('errorListBody').innerHTML = '<div class="loading-state">connecting to raygun...</div>';
-
+    btn.textContent = 'Loading...'; btn.disabled = true;
+    document.getElementById('errorListBody').innerHTML = '<div class="loading-state">Loading errors from Raygun...</div>';
     try {
-      const res = await fetch(API, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'fetch_raygun' })
-      });
+      const res = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'fetch_raygun' }) });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       allErrors = data.errors || [];
       document.getElementById('errorCount').textContent = allErrors.length;
-      document.getElementById('syncTime').textContent = 'synced ' + new Date().toLocaleTimeString();
+      document.getElementById('syncTime').textContent = 'Updated ' + new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
       renderErrorList();
-    } catch (e) {
-      document.getElementById('errorListBody').innerHTML = `<div class="fetch-error">⚠ ${e.message}</div>`;
+    } catch(e) {
+      document.getElementById('errorListBody').innerHTML = `<div class="fetch-error">⚠ ${escHtml(e.message)}</div>`;
     } finally {
-      btn.textContent = '↻ sync';
-      btn.disabled = false;
+      btn.textContent = '↻ Refresh'; btn.disabled = false;
     }
   }
 
   function renderErrorList() {
     const body = document.getElementById('errorListBody');
-    if (!allErrors.length) {
-      body.innerHTML = '<div class="loading-state">no errors found</div>';
-      return;
-    }
+    if (!allErrors.length) { body.innerHTML = '<div class="loading-state">No active errors found 🎉</div>'; return; }
     body.innerHTML = allErrors.map((err, i) => {
       const p = getPriority(err);
       const isSelected = selectedError && selectedError.identifier === err.identifier;
-      const msg = (err.message || 'Unknown error').slice(0, 75) + ((err.message || '').length > 75 ? '…' : '');
-      const date = err.lastOccurredAt ? new Date(err.lastOccurredAt).toLocaleDateString() : '—';
-      return `
-        <div class="error-item${isSelected ? ' selected' : ''}" onclick="selectError(${i})">
-          <div class="error-item-top">
-            <span class="priority-chip" style="background:${p.bg}22;color:${p.bg};border:1px solid ${p.bg}44">${p.label}</span>
-            <span class="error-status">${err.status || ''}</span>
-          </div>
-          <div class="error-msg">${escHtml(msg)}</div>
-          <div class="error-date">${date}</div>
-        </div>`;
+      const msg = (err.message || 'Unknown error').slice(0, 80) + ((err.message||'').length > 80 ? '…' : '');
+      return `<div class="error-item${isSelected?' selected':''}" onclick="selectError(${i})">
+        <div class="error-item-top">
+          <span class="priority-pill" style="color:${p.color};background:${p.bg};border-color:${p.border}">${p.label}</span>
+          <span style="font-size:11px;color:var(--text-muted)">${timeAgo(err.lastOccurredAt)}</span>
+        </div>
+        <div class="error-msg">${escHtml(msg)}</div>
+        <div class="error-meta">
+          <span>${escHtml(err.status || '')}</span>
+          <span>·</span>
+          <span>First: ${timeAgo(err.createdAt)}</span>
+        </div>
+      </div>`;
     }).join('');
-  }
-
-  function escHtml(s) {
-    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
 
   async function selectError(idx) {
     selectedError = allErrors[idx];
-    currentAnalysis = null;
-    currentJiraDraft = null;
-    activeTab = 'analysis';
+    currentAnalysis = null; currentJiraDraft = null; activeTab = 'analysis';
     renderErrorList();
     showAnalyzing();
-
     try {
-      const res = await fetch(API, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'analyze_error', errorData: selectedError })
-      });
+      const res = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'analyze_error', errorData: selectedError }) });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       currentAnalysis = data.analysis;
-      currentJiraDraft = {
-        title: data.analysis.jiraTitle,
-        description: data.analysis.jiraDescription,
-        priority: data.analysis.priority
-      };
+      currentJiraDraft = { title: data.analysis.jiraTitle, description: data.analysis.jiraDescription, priority: data.analysis.priority };
       renderAnalysis();
     } catch(e) {
-      document.getElementById('analysisPanel').innerHTML = `
-        <div class="panel-inner">
-          <div class="fetch-error">⚠ ${escHtml(e.message)}</div>
-        </div>`;
+      document.getElementById('analysisPanel').innerHTML = `<div class="panel-inner"><div class="fetch-error">⚠ ${escHtml(e.message)}</div></div>`;
     }
-  }
-
-  function showAnalyzing() {
-    document.getElementById('analysisPanel').innerHTML = `
-      <div class="panel-inner">
-        ${errorCardHTML()}
-        <div class="spinner-wrap">
-          <div class="spinner"></div>
-          analyzing error with AI...
-        </div>
-      </div>`;
   }
 
   function errorCardHTML() {
     if (!selectedError) return '';
-    const first = selectedError.createdAt ? new Date(selectedError.createdAt).toLocaleDateString() : '—';
-    const last = selectedError.lastOccurredAt ? new Date(selectedError.lastOccurredAt).toLocaleDateString() : '—';
-    return `
-      <div class="error-card">
-        <div class="error-card-msg">${escHtml(selectedError.message || 'Unknown error')}</div>
-        <div class="error-card-meta">
-          <span>status: <em>${selectedError.status || '—'}</em></span>
-          <span>first: <em>${first}</em></span>
-          <span>last: <em>${last}</em></span>
-        </div>
-      </div>`;
+    return `<div class="error-card">
+      <div class="error-card-msg">${escHtml(selectedError.message || 'Unknown error')}</div>
+      <div class="error-card-meta">
+        <span><strong>Status:</strong> ${escHtml(selectedError.status||'—')}</span>
+        <span><strong>First seen:</strong> ${timeAgo(selectedError.createdAt)}</span>
+        <span><strong>Last seen:</strong> ${timeAgo(selectedError.lastOccurredAt)}</span>
+      </div>
+    </div>`;
+  }
+
+  function showAnalyzing() {
+    document.getElementById('analysisPanel').innerHTML = `<div class="panel-inner">${errorCardHTML()}<div class="spinner-wrap"><div class="spinner"></div> Analyzing with AI...</div></div>`;
   }
 
   function tabsHTML() {
-    return `
-      <div class="tabs">
-        <button class="tab-btn${activeTab==='analysis'?' active':''}" onclick="switchTab('analysis')">Analysis</button>
-        <button class="tab-btn${activeTab==='jira'?' active':''}" onclick="switchTab('jira')">Jira Draft</button>
-      </div>`;
+    return `<div class="tabs">
+      <button class="tab-btn${activeTab==='analysis'?' active':''}" onclick="switchTab('analysis')">Analysis</button>
+      <button class="tab-btn${activeTab==='jira'?' active':''}" onclick="switchTab('jira')">Jira Draft</button>
+    </div>`;
   }
 
-  function switchTab(tab) {
-    activeTab = tab;
-    renderAnalysis();
-  }
-
-  const PRIORITY_COLORS = {
-    critical: { bg: '#ff3333', text: '#fff', label: 'P1 · CRITICAL' },
-    high:     { bg: '#ff8800', text: '#fff', label: 'P2 · HIGH' },
-    medium:   { bg: '#f0c020', text: '#000', label: 'P3 · MEDIUM' },
-    low:      { bg: '#33bb66', text: '#fff', label: 'P4 · LOW' },
-  };
+  function switchTab(tab) { activeTab = tab; renderAnalysis(); }
 
   function renderAnalysis() {
     const a = currentAnalysis;
-    const panel = document.getElementById('analysisPanel');
-    const pc = PRIORITY_COLORS[a.priority] || PRIORITY_COLORS.medium;
-
+    const p = PRIORITIES[a.priority] || PRIORITIES.medium;
     let content = '';
+
     if (activeTab === 'analysis') {
-      const cards = [
-        { label: 'What happened', value: a.plainEnglish, accent: ACCENT_COLORS[0] },
-        { label: 'Business impact', value: a.impact, accent: ACCENT_COLORS[1] },
-        { label: 'Root cause', value: a.rootCause, accent: ACCENT_COLORS[2] },
-        { label: 'Dev recommendation', value: a.recommendation, accent: ACCENT_COLORS[3] },
+      const sections = [
+        { label: 'What Happened', value: a.plainEnglish },
+        { label: 'Business Impact', value: a.impact },
+        { label: 'Root Cause', value: a.rootCause },
+        { label: 'Dev Recommendation', value: a.recommendation },
       ];
       content = `
-        <div class="priority-row">
-          <span class="priority-badge" style="background:${pc.bg};color:${pc.text}">${pc.label}</span>
-          <span class="priority-reason">${escHtml(a.priorityReason || '')}</span>
+        <div class="priority-banner" style="background:${p.bg};border-color:${p.border}">
+          <span class="priority-badge" style="color:${p.color}">${p.label}</span>
+          <span class="priority-reason" style="color:${p.color}">${escHtml(a.priorityReason||'')}</span>
         </div>
-        ${cards.map(c => `
-          <div class="analysis-card" style="border-left-color:${c.accent}">
-            <div class="analysis-label" style="color:${c.accent}">${c.label}</div>
-            <div class="analysis-value">${escHtml(c.value || '')}</div>
-          </div>`).join('')}
-        <button class="action-btn" onclick="switchTab('jira')">Review Jira Draft →</button>`;
+        <div class="analysis-grid">
+          ${sections.map(s => `<div class="analysis-card"><div class="analysis-label">${s.label}</div><div class="analysis-value">${escHtml(s.value||'')}</div></div>`).join('')}
+        </div>
+        <button class="view-jira-btn" onclick="switchTab('jira')">View Jira Draft →</button>`;
     } else {
-      content = `
-        <div class="jira-card">
-          <div class="jira-label">Ticket Title</div>
-          <div class="jira-title-text">${escHtml(currentJiraDraft?.title || '')}</div>
+      content = `<div class="jira-section">
+        <div class="jira-field">
+          <div class="jira-field-label">Ticket Title</div>
+          <div class="jira-title-text">${escHtml(currentJiraDraft?.title||'')}</div>
         </div>
-        <div class="jira-card">
-          <div class="jira-label">Description</div>
-          <div class="jira-desc">${escHtml(currentJiraDraft?.description || '')}</div>
+        <div class="jira-field">
+          <div class="jira-field-label">Description</div>
+          <div class="jira-desc">${escHtml(currentJiraDraft?.description||'')}</div>
         </div>
         <div id="jiraResult"></div>
-        <button class="jira-btn" id="jiraBtn" onclick="createJiraTicket()">→ Send to Jira Backlog · ${JIRA_PROJECT}</button>`;
+        <button class="jira-btn" id="jiraBtn" onclick="createJiraTicket()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.016 13.12l-4.2 4.936a1.066 1.066 0 01-1.632 0l-4.2-4.936a1.066 1.066 0 01.816-1.752h2.4V6.8c0-.442.358-.8.8-.8h2.4c.442 0 .8.358.8.8v4.568h2.4c.7 0 1.1.812.816 1.752z"/></svg>
+          Send to Jira Backlog · ${JIRA_PROJECT}
+        </button>
+      </div>`;
     }
 
-    panel.innerHTML = `
-      <div class="panel-inner">
-        ${errorCardHTML()}
-        ${tabsHTML()}
-        ${content}
-      </div>`;
+    document.getElementById('analysisPanel').innerHTML = `<div class="panel-inner">${errorCardHTML()}${tabsHTML()}${content}</div>`;
   }
 
   async function createJiraTicket() {
     const btn = document.getElementById('jiraBtn');
     if (!btn || !currentJiraDraft) return;
-    btn.disabled = true;
-    btn.textContent = 'creating in jira...';
-
+    btn.disabled = true; btn.textContent = 'Creating ticket...';
     try {
-      const res = await fetch(API, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'create_jira',
-          jiraData: {
-            project: JIRA_PROJECT,
-            title: currentJiraDraft.title,
-            description: currentJiraDraft.description,
-            priority: currentJiraDraft.priority
-          }
-        })
-      });
+      const res = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'create_jira', jiraData: { project: JIRA_PROJECT, title: currentJiraDraft.title, description: currentJiraDraft.description, priority: currentJiraDraft.priority } }) });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
-      document.getElementById('jiraResult').innerHTML = `<div class="result-msg success">✓ ${data.key || 'Ticket'} created in ${JIRA_PROJECT} backlog</div>`;
-      btn.className = 'jira-btn success';
-      btn.textContent = '✓ created';
+      document.getElementById('jiraResult').innerHTML = `<div class="result-msg success">✓ ${data.key || 'Ticket'} created successfully in ${JIRA_PROJECT} backlog</div>`;
+      btn.className = 'jira-btn success'; btn.textContent = '✓ Ticket Created';
     } catch(e) {
       document.getElementById('jiraResult').innerHTML = `<div class="result-msg error">✗ ${escHtml(e.message)}</div>`;
-      btn.disabled = false;
-      btn.textContent = `→ Send to Jira Backlog · ${JIRA_PROJECT}`;
+      btn.disabled = false; btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.016 13.12l-4.2 4.936a1.066 1.066 0 01-1.632 0l-4.2-4.936a1.066 1.066 0 01.816-1.752h2.4V6.8c0-.442.358-.8.8-.8h2.4c.442 0 .8.358.8.8v4.568h2.4c.7 0 1.1.812.816 1.752z"/></svg> Send to Jira Backlog · ${JIRA_PROJECT}`;
     }
   }
 
