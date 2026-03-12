@@ -112,9 +112,10 @@ Return this exact JSON (all fields required, no nulls):
   "priorityReason": "One sentence explaining priority based on recency and likely business impact",
   "jiraTitle": "Concise user-friendly ticket title under 80 chars — describe the user-facing problem, not the technical error. Example: 'Form validation fails on registration page' not 'jQuery .valid() undefined'",
   "summary": "2-3 sentences describing what is broken and what the user experiences. Write for a non-technical audience.",
-  "stepsToReproduce": "Use the stack trace and request URL to infer the most accurate reproduction steps possible. Write numbered steps a QA tester could follow. Include: the specific page or URL the user was on, the action they were taking (form submission, page load, button click, etc.), and what happens as a result. If the request URL is available use it to identify the exact route. Example format: 1. Navigate to [specific URL or page]. 2. [Perform the action that triggers this code path]. 3. Observe [the error or failure]. If truly unknown write your best inference based on the method names and file paths in the stack trace.",
-  "environment": "Use the stack trace and request context to fill this in as accurately as possible. Include: (1) the specific URL or route affected — extract from the request URL in the stack context if available, (2) Production or QA based on the domain, (3) server-side or client-side error based on the stack trace language and file names (.cs = .NET server, .js = client), (4) any browser or platform info if available. Format as a clean list. Example: Production (checkcity.com) | Route: /apply/loan | Server-side .NET error | Browser: Unknown.",
-  "technicalDetails": "Error message verbatim, Raygun URL, first seen date, last seen date, request URL if available, likely technical cause in one sentence for a developer"
+  "stepsToReproduce": "Use the stack trace, request URL, referer, and any user/loan context to write the most accurate reproduction steps possible for a QA tester. Reference specific pages (.aspx routes), user states (logged in, loan in NV state, deferred loan, etc.), and the exact sequence of actions that led to the error. Include specific IDs or states if present in the stack context. Write 3-6 numbered steps. Be as specific as the stack trace allows.",
+  "environment": "Extract all available environment details from the stack trace and request context. Return as a newline-separated list of key: value pairs. Include every field available such as: Host, Machine, Build, State, Affected User, Loan ID, isRefinance, Referer, Method, SQL Server, Occurred. Only include fields that have actual values from the stack trace — do not invent values. Example format: Host: members.checkcity.com\nMachine: CCDBMEMBERS11\nMethod: GET /Loan_ThankYou.aspx\nOccurred: 2026-03-10 1:39:13 PM",
+  "technicalDetails": "Error message verbatim, first seen and last seen dates, likely technical cause in one sentence",
+  "developerNotes": "The full Raygun error URL for direct investigation (use errorData.applicationUrl)"
 }`;
 
     const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
@@ -171,17 +172,35 @@ Return this exact JSON (all fields required, no nulls):
     }
 
     const d = jiraData.sections || {};
+
+    // Build environment as bullet list
+    const envLines = (d.environment || "").split("\n").filter(Boolean);
+    const envNode = envLines.length > 1
+      ? adfBullet(envLines)
+      : adfParagraph(d.environment);
+
+    // Build reproduction steps - detect numbered list
+    const stepLines = (d.stepsToReproduce || "").split("\n").filter(l => l.trim());
+    const stepsNode = stepLines.length > 1
+      ? {
+          type: "orderedList",
+          content: stepLines.map(line => ({
+            type: "listItem",
+            content: [{ type: "paragraph", content: [{ type: "text", text: line.replace(/^\d+\.\s*/, "") }] }]
+          }))
+        }
+      : adfParagraph(d.stepsToReproduce);
+
     const adfContent = [
-      // Description section
       adfHeading("Description"),
       adfParagraph(d.summary),
       adfParagraph(d.technicalDetails),
-      // Reproduction Steps section
       adfHeading("Reproduction Steps"),
-      adfParagraph(d.stepsToReproduce),
-      // Environment section
+      stepsNode,
       adfHeading("Environment"),
-      adfParagraph(d.environment),
+      envNode,
+      adfHeading("Developer Notes"),
+      adfParagraph(d.developerNotes || jiraData.raygunUrl || ""),
     ];
 
     const body = {
@@ -190,7 +209,7 @@ Return this exact JSON (all fields required, no nulls):
         summary: jiraData.title,
         issuetype: { name: "Bug" },
         priority: { name: priorityMap[jiraData.priority] || "Medium" },
-        labels: ["CCO", "Raygun"],
+        labels: ["CCO", "Raygun", "AI"],
         components: [{ name: "Web" }],
         parent: { key: "TDG-125" },
         description: { type: "doc", version: 1, content: adfContent },
