@@ -215,6 +215,7 @@
 <script>
   const API = '/api/generate';
   const JIRA_PROJECT = 'TDG';
+  const JIRA_ASSIGNEE_ID = '712020:4fe76742-3abf-40ab-ab12-fce8cc5ae228';
 
   const PRIORITIES = {
     critical: { label: 'P1 · Critical', color: '#dc2626', bg: '#fef2f2', border: '#fecaca' },
@@ -379,11 +380,13 @@
     if (!btn || !currentJiraDraft) return;
     btn.disabled = true; btn.textContent = 'Creating ticket...';
     try {
-      const res = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'create_jira', jiraData: { project: JIRA_PROJECT, title: currentJiraDraft.title, description: currentJiraDraft.description, priority: currentJiraDraft.priority } }) });
+      const res = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'create_jira', jiraData: { project: JIRA_PROJECT, title: currentJiraDraft.title, description: currentJiraDraft.description, priority: currentJiraDraft.priority, assigneeId: JIRA_ASSIGNEE_ID } }) });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
-      document.getElementById('jiraResult').innerHTML = `<div class="result-msg success">✓ ${data.key || 'Ticket'} created successfully in ${JIRA_PROJECT} backlog</div>`;
-      btn.className = 'jira-btn success'; btn.textContent = '✓ Ticket Created';
+      const ticketKey = data.key || 'Ticket';
+      const jiraUrl = data.key ? `https://checkcity.atlassian.net/browse/${data.key}` : null;
+      document.getElementById('jiraResult').innerHTML = `<div class="result-msg success">✓ <strong>${ticketKey}</strong> created in ${JIRA_PROJECT} backlog${jiraUrl ? ` — <a href="${jiraUrl}" target="_blank" style="color:#16a34a">View in Jira →</a>` : ''}</div>`;
+      btn.className = 'jira-btn success'; btn.textContent = '✓ ' + ticketKey + ' Created';
     } catch(e) {
       document.getElementById('jiraResult').innerHTML = `<div class="result-msg error">✗ ${escHtml(e.message)}</div>`;
       btn.disabled = false; btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.016 13.12l-4.2 4.936a1.066 1.066 0 01-1.632 0l-4.2-4.936a1.066 1.066 0 01.816-1.752h2.4V6.8c0-.442.358-.8.8-.8h2.4c.442 0 .8.358.8.8v4.568h2.4c.7 0 1.1.812.816 1.752z"/></svg> Send to Jira Backlog · ${JIRA_PROJECT}`;
