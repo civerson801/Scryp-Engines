@@ -77,12 +77,11 @@ Return this exact JSON (all fields required, no nulls):
   "rootCause": "Likely technical root cause in 1-2 sentences",
   "recommendation": "Specific first step the dev team should take",
   "priorityReason": "One sentence explaining priority based on recency and likely business impact",
-  "jiraTitle": "[BUG] Concise descriptive ticket title under 80 chars",
-  "summary": "2-3 sentence summary of the bug for the Jira description header",
-  "stepsToReproduce": "Numbered steps to reproduce, or note that investigation is required if steps are unknown",
-  "expectedBehavior": "What should happen without this error",
-  "actualBehavior": "What actually happens due to this error",
-  "technicalDetails": "Error message, Raygun URL, first/last seen dates, likely cause"
+  "jiraTitle": "Concise user-friendly ticket title under 80 chars — describe the user-facing problem, not the technical error. Example: 'Form validation fails on registration page' not 'jQuery .valid() undefined'",
+  "summary": "2-3 sentences describing what is broken and what the user experiences. Write for a non-technical audience.",
+  "stepsToReproduce": "Numbered steps a tester could follow to reproduce this issue. If exact steps are unknown, write: 'Steps require investigation — see Raygun URL for context.'",
+  "environment": "Where this occurs — include browser/platform if known, affected URL or page, and whether it is production or QA. Default to: Production (checkcity.com) if unknown.",
+  "technicalDetails": "Error message verbatim, Raygun URL, first seen date, last seen date, likely technical cause"
 }`;
 
     const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
@@ -140,18 +139,16 @@ Return this exact JSON (all fields required, no nulls):
 
     const d = jiraData.sections || {};
     const adfContent = [
-      adfHeading("Summary"),
+      // Description section
+      adfHeading("Description"),
       adfParagraph(d.summary),
-      adfHeading("Steps to Reproduce"),
-      adfParagraph(d.stepsToReproduce),
-      adfHeading("Expected Behavior"),
-      adfParagraph(d.expectedBehavior),
-      adfHeading("Actual Behavior"),
-      adfParagraph(d.actualBehavior),
-      adfHeading("Impact"),
-      adfParagraph(d.impact),
-      adfHeading("Technical Details"),
       adfParagraph(d.technicalDetails),
+      // Reproduction Steps section
+      adfHeading("Reproduction Steps"),
+      adfParagraph(d.stepsToReproduce),
+      // Environment section
+      adfHeading("Environment"),
+      adfParagraph(d.environment),
     ];
 
     const body = {
