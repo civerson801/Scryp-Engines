@@ -313,16 +313,19 @@
   const JIRA_ASSIGNEE_ID = '712020:4fe76742-3abf-40ab-ab12-fce8cc5ae228';
 
   const PRIORITIES = {
-    critical: { label: 'P1 · Critical', color: '#dc2626', bg: '#fef2f2', border: '#fecaca', dot: '#dc2626' },
-    high:     { label: 'P2 · High',     color: '#ea580c', bg: '#fff7ed', border: '#fed7aa', dot: '#ea580c' },
-    medium:   { label: 'P3 · Medium',   color: '#ca8a04', bg: '#fefce8', border: '#fde68a', dot: '#ca8a04' },
-    low:      { label: 'P4 · Low',      color: '#16a34a', bg: '#f0fdf4', border: '#bbf7d0', dot: '#16a34a' },
+    critical:   { label: 'P1 · Critical', color: '#dc2626', bg: '#fef2f2', border: '#fecaca', dot: '#dc2626' },
+    high:       { label: 'P2 · High',     color: '#ea580c', bg: '#fff7ed', border: '#fed7aa', dot: '#ea580c' },
+    medium:     { label: 'P3 · Medium',   color: '#ca8a04', bg: '#fefce8', border: '#fde68a', dot: '#ca8a04' },
+    low:        { label: 'P4 · Low',      color: '#16a34a', bg: '#f0fdf4', border: '#bbf7d0', dot: '#16a34a' },
+    unreviewed: { label: 'Unreviewed',    color: '#6b6b80', bg: '#f5f5f7', border: '#d1d1d6', dot: '#9999aa' },
   };
 
   const SECTION_ICONS = { 'What Happened': '💥', 'Business Impact': '📊', 'Root Cause': '🔬', 'Dev Recommendation': '🛠️' };
 
   // Ticket tracking - persists across refreshes
   const TICKET_STORE_KEY = 'cco_triage_tickets';
+  const PRIORITY_STORE_KEY = 'cco_triage_priorities';
+
   function getTicketMap() {
     try { return JSON.parse(localStorage.getItem(TICKET_STORE_KEY) || '{}'); } catch { return {}; }
   }
@@ -333,6 +336,18 @@
   }
   function getTicketForError(errorIdentifier) {
     return getTicketMap()[errorIdentifier] || null;
+  }
+
+  function getPriorityMap() {
+    try { return JSON.parse(localStorage.getItem(PRIORITY_STORE_KEY) || '{}'); } catch { return {}; }
+  }
+  function saveAiPriority(errorIdentifier, priority) {
+    const map = getPriorityMap();
+    map[errorIdentifier] = priority;
+    localStorage.setItem(PRIORITY_STORE_KEY, JSON.stringify(map));
+  }
+  function getAiPriorityForError(errorIdentifier) {
+    return getPriorityMap()[errorIdentifier] || null;
   }
 
   let allErrors = [], filteredErrors = [], selectedError = null, currentAnalysis = null, currentJiraDraft = null, activeTab = 'analysis';
@@ -371,28 +386,16 @@
     return Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000);
   }
 
-  // Score errors for sorting: use AI priority if available, fall back to recency
-  const PRIORITY_ORDER = { critical: 0, high: 1, medium: 2, low: 3 };
+  // Priority order — unreviewed sorts last
+  const PRIORITY_ORDER = { critical: 0, high: 1, medium: 2, low: 3, unreviewed: 4 };
 
-  function scoreError(err) {
-    const aiPriority = PRIORITY_ORDER[err._aiPriority];
-    if (aiPriority !== undefined) return aiPriority;
-    // Fallback: recency-based until AI has analyzed
-    const days = daysSince(err.lastOccurredAt);
-    if (days === 0) return 0;
-    if (days <= 3) return 1;
-    if (days <= 30) return 2;
-    return 3;
+  function getEffectivePriority(err) {
+    // Always use persisted AI priority if available, then in-memory, then unreviewed
+    return err._aiPriority || getAiPriorityForError(err.identifier) || 'unreviewed';
   }
 
-  function getPriorityFromScore(err) {
-    if (err._aiPriority) return err._aiPriority;
-    // Fallback before AI analysis
-    const days = daysSince(err.lastOccurredAt);
-    if (days === 0) return 'critical';
-    if (days <= 3) return 'high';
-    if (days <= 30) return 'medium';
-    return 'low';
+  function scoreError(err) {
+    return PRIORITY_ORDER[getEffectivePriority(err)] ?? 4;
   }
 
   function applyFilters() {
@@ -428,6 +431,11 @@
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       allErrors = data.errors || [];
+      // Restore persisted AI priorities so they survive refreshes
+      const savedPriorities = getPriorityMap();
+      allErrors.forEach(err => {
+        if (savedPriorities[err.identifier]) err._aiPriority = savedPriorities[err.identifier];
+      });
       document.getElementById('syncTime').textContent = 'Updated ' + new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
       applyFilters();
     } catch(e) {
@@ -444,7 +452,7 @@
       return;
     }
     body.innerHTML = filteredErrors.map((err, i) => {
-      const priority = getPriorityFromScore(err);
+      const priority = getEffectivePriority(err);
       const p = PRIORITIES[priority];
       const isSelected = selectedError && selectedError.identifier === err.identifier;
       const msg = (err.message || 'Unknown error').slice(0, 72) + ((err.message||'').length > 72 ? '…' : '');
@@ -466,7 +474,7 @@
 
   function errorCardHTML() {
     if (!selectedError) return '';
-    const priority = getPriorityFromScore(selectedError);
+    const priority = getEffectivePriority(selectedError);
     const p = PRIORITIES[priority];
     return `<div class="error-card">
       <div class="error-card-msg">${escHtml(selectedError.message || 'Unknown error')}</div>
@@ -495,6 +503,7 @@
       currentAnalysis = data.analysis;
       // Store AI priority back on the error so the list can re-sort
       selectedError._aiPriority = data.analysis.priority;
+      saveAiPriority(selectedError.identifier, data.analysis.priority);
       applyFilters();
       currentJiraDraft = {
         title: data.analysis.jiraTitle,
