@@ -97,57 +97,61 @@ Return this exact JSON:
 
   // Create Jira ticket via Anthropic MCP
   if (action === "create_jira" && jiraData) {
-    if (!process.env.ANTHROPIC_API_KEY) {
-      return res.status(500).json({ error: "ANTHROPIC_API_KEY not set" });
+    const atlassianEmail = process.env.ATLASSIAN_EMAIL;
+    const atlassianToken = process.env.ATLASSIAN_TOKEN;
+    const jiraDomain = "checkcity.atlassian.net";
+
+    if (!atlassianEmail || !atlassianToken) {
+      return res.status(500).json({ error: "ATLASSIAN_EMAIL or ATLASSIAN_TOKEN not set in Vercel environment variables" });
     }
+
     const priorityMap = { critical: "Highest", high: "High", medium: "Medium", low: "Low" };
-    const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
+    const auth = Buffer.from(`${atlassianEmail}:${atlassianToken}`).toString("base64");
+
+    // Build ADF description
+    const descLines = (jiraData.description || "").split("\n").filter(Boolean);
+    const adfContent = descLines.map(line => ({
+      type: "paragraph",
+      content: [{ type: "text", text: line }]
+    }));
+
+    const body = {
+      fields: {
+        project: { key: jiraData.project },
+        summary: jiraData.title,
+        issuetype: { name: "Bug" },
+        priority: { name: priorityMap[jiraData.priority] || "Medium" },
+        description: {
+          type: "doc",
+          version: 1,
+          content: adfContent.length ? adfContent : [{ type: "paragraph", content: [{ type: "text", text: jiraData.description || "" }] }]
+        },
+      }
+    };
+
+    if (jiraData.assigneeId) {
+      body.fields.assignee = { accountId: jiraData.assigneeId };
+    }
+
+    const jiraRes = await fetch(`https://${jiraDomain}/rest/api/3/issue`, {
       method: "POST",
       headers: {
+        "Authorization": `Basic ${auth}`,
         "Content-Type": "application/json",
-        "x-api-key": process.env.ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-        "anthropic-beta": "mcp-client-2025-04-04",
+        "Accept": "application/json",
       },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 1000,
-        messages: [{
-          role: "user",
-          content: `Use the Jira MCP tool to create a new issue with these exact details:\n- Project: ${jiraData.project}\n- Summary: ${jiraData.title}\n- Issue Type: Bug\n- Priority: ${priorityMap[jiraData.priority] || "Medium"}\n- Description: ${jiraData.description}\n- Assignee accountId: ${jiraData.assigneeId || ""}\n\nAfter creating, respond with just the issue key (e.g. TDG-123).`,
-        }],
-        mcp_servers: [{ type: "url", url: "https://mcp.atlassian.com/v1/mcp", name: "atlassian" }],
-      }),
+      body: JSON.stringify(body),
     });
-    const data = await aiRes.json();
-    console.log("Jira MCP raw response:", JSON.stringify(data, null, 2));
 
-    let ticketKey = null;
-    for (const block of (data.content || [])) {
-      if (block.type === "mcp_tool_result") {
-        const rt = block.content?.[0]?.text || "";
-        console.log("mcp_tool_result text:", rt);
-        try {
-          const p = JSON.parse(rt);
-          if (p.key) { ticketKey = p.key; break; }
-          if (p.id) { ticketKey = p.id; break; }
-        } catch {}
-        const m = rt.match(/[A-Z]+-[0-9]+/); if (m) { ticketKey = m[0]; break; }
-      }
-      if (block.type === "text" && block.text) {
-        console.log("text block:", block.text);
-        if (!ticketKey) {
-          const m = block.text.match(/[A-Z]+-[0-9]+/); if (m) ticketKey = m[0];
-        }
-      }
+    const jiraData2 = await jiraRes.json();
+    console.log("Jira REST response:", JSON.stringify(jiraData2));
+
+    if (!jiraRes.ok) {
+      const errMsg = jiraData2.errors ? JSON.stringify(jiraData2.errors) : (jiraData2.errorMessages?.[0] || `HTTP ${jiraRes.status}`);
+      return res.status(500).json({ error: `Jira error: ${errMsg}` });
     }
 
-    if (data.error) {
-      return res.status(500).json({ error: data.error.message || JSON.stringify(data.error) });
-    }
-
-    const textBlock = data.content?.find(b => b.type === "text");
-    return res.status(200).json({ success: true, key: ticketKey, message: textBlock?.text, debug: data.content?.map(b => b.type) });
+    return res.status(200).json({ success: true, key: jiraData2.key, id: jiraData2.id });
   }
 
   // Original prompt-based generation
