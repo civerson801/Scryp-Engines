@@ -87,25 +87,28 @@ export default async function handler(req, res) {
       log.push({ step: "tools/list", ...listResult });
     } catch (e) { log.push({ step: "tools/list", error: e.message }); }
 
-    // Step 2: try error_group_investigate with full error identifier
+    // Convert base36 identifier to base10 (required by MCP tools)
+    const errorGroupIdBase10 = parseInt(errorData.identifier, 36).toString();
+
+    // Step 2: try error_group_investigate with correct param names + base10 ID
     try {
       const r = await mcpPost("tools/call", {
         name: "error_group_investigate",
-        arguments: { applicationIdentifier: "19hynx5", errorGroupIdentifier: errorData.identifier },
+        arguments: { appId: "19hynx5", errorGroupId: errorGroupIdBase10 },
       });
-      log.push({ step: "error_group_investigate", ...r });
+      log.push({ step: "error_group_investigate", base36: errorData.identifier, base10: errorGroupIdBase10, ...r });
     } catch (e) { log.push({ step: "error_group_investigate", error: e.message }); }
 
-    // Step 3: try error_instances_browse
+    // Step 3: try error_instances_browse with correct param names
     try {
       const r = await mcpPost("tools/call", {
         name: "error_instances_browse",
-        arguments: { applicationIdentifier: "19hynx5", errorGroupIdentifier: errorData.identifier, count: 1 },
+        arguments: { appId: "19hynx5", errorGroupId: errorGroupIdBase10, count: 3 },
       });
-      log.push({ step: "error_instances_browse", ...r });
+      log.push({ step: "error_instances_browse", base10: errorGroupIdBase10, ...r });
     } catch (e) { log.push({ step: "error_instances_browse", error: e.message }); }
 
-    return res.status(200).json({ errorIdentifier: errorData.identifier, debug: log });
+    return res.status(200).json({ errorIdentifier: errorData.identifier, errorGroupIdBase10, debug: log });
   }
 
   // Analyze a single error with AI
@@ -203,13 +206,16 @@ export default async function handler(req, res) {
     }
 
     // ── Strategy 1: Raygun MCP (JSON-RPC) ─────────────────────────────────────
-    try {
-      console.log("[MCP] Starting MCP fetch for error:", errorData.identifier);
+    // MCP tools use appId + errorGroupId (base10), NOT applicationIdentifier/errorGroupIdentifier
+    const errorGroupIdBase10 = parseInt(errorData.identifier, 36).toString();
 
-      // Step 1: error group overview
+    try {
+      console.log(`[MCP] Starting fetch — base36: ${errorData.identifier}, base10: ${errorGroupIdBase10}`);
+
+      // Step 1: error group overview (stack trace of first occurrence)
       const groupResult = await callRaygunMcp("error_group_investigate", {
-        applicationIdentifier: "19hynx5",
-        errorGroupIdentifier: errorData.identifier,
+        appId: "19hynx5",
+        errorGroupId: errorGroupIdBase10,
       });
       const groupContent = extractFromMcpContent(groupResult);
       if (groupContent) {
@@ -219,29 +225,31 @@ export default async function handler(req, res) {
         console.log("[MCP] error_group_investigate: no content returned");
       }
 
-      // Step 2: browse instances for a recent instance identifier
+      // Step 2: browse instances to get recent occurrence identifiers
       const instancesResult = await callRaygunMcp("error_instances_browse", {
-        applicationIdentifier: "19hynx5",
-        errorGroupIdentifier: errorData.identifier,
-        count: 1,
+        appId: "19hynx5",
+        errorGroupId: errorGroupIdBase10,
+        count: 3,
+        sortOrder: "occurredOn desc",
       });
       const instancesContent = extractFromMcpContent(instancesResult);
       let instanceId = null;
       if (instancesContent) {
         rawInstanceData += instancesContent + "\n";
-        const idMatch = instancesContent.match(/"identifier"\s*:\s*"([^"]+)"/);
+        // Instance IDs are base10 numeric strings per the MCP schema
+        const idMatch = instancesContent.match(/"identifier"\s*:\s*"?(\d+)"?/);
         instanceId = idMatch?.[1] || null;
         console.log(`[MCP] error_instances_browse: got ${instancesContent.length} chars, instanceId=${instanceId}`);
       } else {
         console.log("[MCP] error_instances_browse: no content returned");
       }
 
-      // Step 3: full instance detail with stack trace
+      // Step 3: full instance detail with complete stack trace + request context
       if (instanceId) {
         const detailResult = await callRaygunMcp("error_instance_get_details", {
-          applicationIdentifier: "19hynx5",
-          errorGroupIdentifier: errorData.identifier,
-          errorInstanceIdentifier: instanceId,
+          appId: "19hynx5",
+          errorGroupId: errorGroupIdBase10,
+          errorInstanceId: instanceId,
         });
         const detailContent = extractFromMcpContent(detailResult);
         if (detailContent) {
