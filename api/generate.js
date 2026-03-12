@@ -55,28 +55,28 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: "ANTHROPIC_API_KEY not set" });
     }
 
-    // Fetch full error details + stack trace from Raygun
+    // Fetch stack trace from Raygun error instances endpoint
     let stackTrace = "";
     let errorContext = "";
     try {
       const detailRes = await fetch(
-        `https://api.raygun.com/v3/applications/19hynx5/error-groups/${errorData.identifier}`,
-        { headers: { Authorization: `Bearer ${process.env.RAYGUN_TOKEN}` } }
+        `https://api.raygun.com/v3/applications/19hynx5/error-groups/${errorData.identifier}/errors?count=1`,
+        { headers: { Authorization: `Bearer ${process.env.RAYGUN_TOKEN}`, "Content-Type": "application/json" } }
       );
-      const detail = await detailRes.json();
-      // Get stack trace from first occurrence
-      if (detail.firstOccurrence?.stackTrace) {
-        stackTrace = detail.firstOccurrence.stackTrace
-          .slice(0, 15)
-          .map(f => `  at ${f.methodName || f.className || "unknown"} (${f.fileName || ""}:${f.lineNumber || ""})`)
-          .join("
-");
-      }
-      if (detail.firstOccurrence?.request?.url) {
-        errorContext = `Request URL: ${detail.firstOccurrence.request.url}`;
-      }
-      if (detail.firstOccurrence?.request?.httpMethod) {
-        errorContext += ` [${detail.firstOccurrence.request.httpMethod}]`;
+      const ct = detailRes.headers.get("content-type") || "";
+      if (detailRes.ok && ct.includes("json")) {
+        const detail = await detailRes.json();
+        const errors = Array.isArray(detail) ? detail : (detail.errors || [detail]);
+        const first = errors[0];
+        if (first?.stackTrace?.length) {
+          stackTrace = first.stackTrace
+            .slice(0, 12)
+            .map(f => `  at ${f.methodName || f.className || "unknown"} (${f.fileName || ""}:${f.lineNumber || ""})`)
+            .join("\n");
+        }
+        if (first?.request?.url) errorContext = `${first.request.httpMethod || "GET"} ${first.request.url}`;
+      } else {
+        console.log("Stack trace fetch failed, status:", detailRes.status);
       }
     } catch (e) {
       console.log("Could not fetch stack trace:", e.message);
@@ -107,14 +107,14 @@ Return this exact JSON (all fields required, no nulls):
   "priority": "critical|high|medium|low",
   "plainEnglish": "2-3 sentences explaining what is broken in plain English for a Product Manager who has no technical background. Use the stack trace to identify WHICH page or feature is affected. Describe what the user would actually experience — what they were trying to do, what went wrong, and whether they can continue or are fully blocked.",
   "impact": "Based on the stack trace and request URL, identify the specific CCO feature or page that is broken (e.g. loan application form, payment page, login screen, document upload, account dashboard). Explain in plain English what a customer trying to use that feature would experience. State whether this fully blocks them from completing their task or just causes friction. Reference whether it likely affects revenue (e.g. blocking loan submissions or payments) or compliance. Write this for a Product Manager — no technical jargon.",
-  "rootCause": "Likely technical root cause in 1-2 sentences",
+  "rootCause": "Use the stack trace to identify the specific file, method, or line where the error originates. Explain in developer terms what is failing and why — reference actual class names, methods, or modules from the stack trace if available.",
   "recommendation": "Specific first step the dev team should take",
   "priorityReason": "One sentence explaining priority based on recency and likely business impact",
   "jiraTitle": "Concise user-friendly ticket title under 80 chars — describe the user-facing problem, not the technical error. Example: 'Form validation fails on registration page' not 'jQuery .valid() undefined'",
   "summary": "2-3 sentences describing what is broken and what the user experiences. Write for a non-technical audience.",
   "stepsToReproduce": "Numbered steps a tester could follow to reproduce this issue. If exact steps are unknown, write: 'Steps require investigation — see Raygun URL for context.'",
   "environment": "Where this occurs — include browser/platform if known, affected URL or page, and whether it is production or QA. Default to: Production (checkcity.com) if unknown.",
-  "technicalDetails": "Error message verbatim, Raygun URL, first seen date, last seen date, request URL if available, top 3-5 relevant stack frames in plain text, likely technical cause"
+  "technicalDetails": "Error message verbatim, Raygun URL, first seen date, last seen date, request URL if available, likely technical cause in one sentence for a developer"
 }`;
 
     const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
