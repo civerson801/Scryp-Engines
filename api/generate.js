@@ -7,22 +7,36 @@ export default async function handler(req, res) {
 
   const { prompt, action, errorData, jiraData } = req.body;
 
-  // Fetch Raygun errors server-side
+  // Fetch Raygun errors server-side with pagination
   if (action === "fetch_raygun") {
     try {
-      const raygunRes = await fetch(
-        "https://api.raygun.com/v3/applications/19hynx5/error-groups?count=200&sortBy=lastOccurredAt&sortOrder=desc",
-        {
-          headers: {
-            Authorization: `Bearer ${process.env.RAYGUN_TOKEN}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
-      const data = await raygunRes.json();
-      const raw = Array.isArray(data) ? data : (data.data || []);
-      // Only show active errors (matching Raygun's Active tab)
-      const errors = raw.filter(e => e.status === 'active');
+      const allErrors = [];
+      const pageSize = 50;
+      let offset = 0;
+      let keepFetching = true;
+
+      while (keepFetching) {
+        const raygunRes = await fetch(
+          `https://api.raygun.com/v3/applications/19hynx5/error-groups?count=${pageSize}&offset=${offset}&sortBy=lastOccurredAt&sortOrder=desc`,
+          {
+            headers: {
+              Authorization: `Bearer ${process.env.RAYGUN_TOKEN}`,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+        const data = await raygunRes.json();
+        const page = Array.isArray(data) ? data : (data.data || []);
+        if (page.length === 0) break;
+        allErrors.push(...page);
+        offset += pageSize;
+        // Stop if we got fewer results than requested (last page)
+        if (page.length < pageSize) keepFetching = false;
+        // Safety cap at 500 errors
+        if (allErrors.length >= 500) keepFetching = false;
+      }
+
+      const errors = allErrors.filter(e => e.status === "active");
       return res.status(200).json({ errors });
     } catch (e) {
       return res.status(500).json({ error: e.message });
