@@ -55,31 +55,128 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: "ANTHROPIC_API_KEY not set" });
     }
 
-    // Fetch stack trace from Raygun error instances endpoint
+    // Fetch full error detail via Raygun MCP server (supports stack traces + instance data)
     let stackTrace = "";
     let errorContext = "";
-    try {
-      const detailRes = await fetch(
-        `https://api.raygun.com/v3/applications/19hynx5/error-groups/${errorData.identifier}/errors?count=1`,
-        { headers: { Authorization: `Bearer ${process.env.RAYGUN_TOKEN}`, "Content-Type": "application/json" } }
-      );
-      const ct = detailRes.headers.get("content-type") || "";
-      if (detailRes.ok && ct.includes("json")) {
-        const detail = await detailRes.json();
-        const errors = Array.isArray(detail) ? detail : (detail.errors || [detail]);
-        const first = errors[0];
-        if (first?.stackTrace?.length) {
-          stackTrace = first.stackTrace
-            .slice(0, 12)
-            .map(f => `  at ${f.methodName || f.className || "unknown"} (${f.fileName || ""}:${f.lineNumber || ""})`)
-            .join("\n");
+    let rawInstanceData = "";
+
+    async function callRaygunMcp(toolName, toolInput) {
+      // MCP over HTTP: send an initialize then a tools/call via JSON-RPC
+      const MCP_URL = "https://api.raygun.com/v3/mcp";
+      const headers = {
+        Authorization: `Bearer ${process.env.RAYGUN_TOKEN}`,
+        "Content-Type": "application/json",
+        Accept: "application/json, text/event-stream",
+      };
+
+      // Use streamable HTTP transport (POST with JSON-RPC)
+      const body = JSON.stringify({
+        jsonrpc: "2.0",
+        id: Date.now(),
+        method: "tools/call",
+        params: { name: toolName, arguments: toolInput },
+      });
+
+      const mcpRes = await fetch(MCP_URL, { method: "POST", headers, body });
+      const ct = mcpRes.headers.get("content-type") || "";
+
+      if (!mcpRes.ok) {
+        console.log(`MCP ${toolName} failed: ${mcpRes.status}`);
+        return null;
+      }
+
+      // Handle SSE response — read full stream and extract last data line
+      if (ct.includes("text/event-stream")) {
+        const text = await mcpRes.text();
+        const lines = text.split("\n").filter(l => l.startsWith("data:"));
+        for (let i = lines.length - 1; i >= 0; i--) {
+          try {
+            const json = JSON.parse(lines[i].slice(5).trim());
+            if (json?.result) return json.result;
+          } catch {}
         }
-        if (first?.request?.url) errorContext = `${first.request.httpMethod || "GET"} ${first.request.url}`;
-      } else {
-        console.log("Stack trace fetch failed, status:", detailRes.status);
+        return null;
+      }
+
+      // Handle plain JSON response
+      const json = await mcpRes.json();
+      return json?.result || null;
+    }
+
+    try {
+      // Step 1: get the error group overview + first occurrence stack trace
+      const groupResult = await callRaygunMcp("error_group_investigate", {
+        applicationIdentifier: "19hynx5",
+        errorGroupIdentifier: errorData.identifier,
+      });
+
+      if (groupResult) {
+        const content = Array.isArray(groupResult.content)
+          ? groupResult.content.map(c => c.text || "").join("\n")
+          : JSON.stringify(groupResult);
+        rawInstanceData += content + "\n";
+        console.log("MCP error_group_investigate response length:", content.length);
+      }
+
+      // Step 2: browse instances to get a recent one with full stack trace
+      const instancesResult = await callRaygunMcp("error_instances_browse", {
+        applicationIdentifier: "19hynx5",
+        errorGroupIdentifier: errorData.identifier,
+        count: 1,
+      });
+
+      let instanceId = null;
+      if (instancesResult) {
+        const instanceContent = Array.isArray(instancesResult.content)
+          ? instancesResult.content.map(c => c.text || "").join("\n")
+          : JSON.stringify(instancesResult);
+
+        // Try to extract an instance identifier from the response text
+        const idMatch = instanceContent.match(/"identifier"\s*:\s*"([^"]+)"/);
+        if (idMatch) instanceId = idMatch[1];
+        rawInstanceData += instanceContent + "\n";
+        console.log("MCP error_instances_browse instanceId:", instanceId);
+      }
+
+      // Step 3: get full raw data for that instance (stack trace, request, environment)
+      if (instanceId) {
+        const instanceDetail = await callRaygunMcp("error_instance_get_details", {
+          applicationIdentifier: "19hynx5",
+          errorGroupIdentifier: errorData.identifier,
+          errorInstanceIdentifier: instanceId,
+        });
+
+        if (instanceDetail) {
+          const detailContent = Array.isArray(instanceDetail.content)
+            ? instanceDetail.content.map(c => c.text || "").join("\n")
+            : JSON.stringify(instanceDetail);
+          rawInstanceData += detailContent + "\n";
+          console.log("MCP error_instance_get_details response length:", detailContent.length);
+
+          // Try to parse structured stack trace from detail
+          try {
+            const detailJson = JSON.parse(
+              detailContent.replace(/^[^{[]*/, "").replace(/[^}\]]*$/, "")
+            );
+            const trace = detailJson?.details?.error?.stackTrace
+              || detailJson?.error?.stackTrace
+              || detailJson?.stackTrace
+              || [];
+            if (trace.length) {
+              stackTrace = trace
+                .slice(0, 20)
+                .map(f => `  at ${f.methodName || f.className || "unknown"} (${f.fileName || f.className || ""}:${f.lineNumber || ""})`)
+                .join("\n");
+            }
+            const req = detailJson?.details?.request || detailJson?.request;
+            if (req?.url) errorContext = `${req.httpMethod || "GET"} ${req.url}`;
+          } catch {
+            // Let the AI parse rawInstanceData as freeform text — it has everything
+          }
+        }
       }
     } catch (e) {
-      console.log("Could not fetch stack trace:", e.message);
+      console.log("Raygun MCP fetch error:", e.message);
     }
 
     const analysisPrompt = `You are a senior engineering triage assistant for a fintech company called Check City (CCO - Check City Online). Analyze this error and return ONLY valid JSON with no markdown, no code fences.
@@ -91,8 +188,11 @@ Error details:
 - Status: ${errorData.status || "N/A"}
 - Raygun Error URL: ${errorData.applicationUrl || "N/A"}
 - Request Context: ${errorContext || "N/A"}
-- Stack Trace:
-${stackTrace || "Not available"}
+- Stack Trace (structured):
+${stackTrace || "See raw data below"}
+
+Raw Raygun Instance Data (use this as your primary source — extract stack trace, request URL, machine name, user info, environment, SQL errors, etc. from here):
+${rawInstanceData ? rawInstanceData.slice(0, 6000) : "Not available"}
 
 Priority guide (base priority on user/system impact, NOT recency):
 - critical: directly blocks core user workflows (login, payments, loan applications, account access) OR causes data loss/corruption OR affects many users simultaneously
