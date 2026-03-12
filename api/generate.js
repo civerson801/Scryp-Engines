@@ -11,7 +11,7 @@ export default async function handler(req, res) {
   if (action === "fetch_raygun") {
     try {
       const raygunRes = await fetch(
-        "https://api.raygun.com/v3/applications/19hynx5/error-groups?count=25&sortBy=lastOccurredAt&sortOrder=desc",
+        "https://api.raygun.com/v3/applications/19hynx5/error-groups?count=50&sortBy=lastOccurredAt&sortOrder=desc&status=active",
         {
           headers: {
             Authorization: `Bearer ${process.env.RAYGUN_TOKEN}`,
