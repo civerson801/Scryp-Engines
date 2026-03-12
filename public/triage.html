@@ -232,12 +232,23 @@
     return Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000);
   }
 
-  // Score errors: based on lastOccurredAt recency (only reliable field from Raygun API)
+  // Score errors for sorting: use AI priority if available, fall back to recency
+  const PRIORITY_ORDER = { critical: 0, high: 1, medium: 2, low: 3 };
+
   function scoreError(err) {
-    return daysSince(err.lastOccurredAt);
+    const aiPriority = PRIORITY_ORDER[err._aiPriority];
+    if (aiPriority !== undefined) return aiPriority;
+    // Fallback: recency-based until AI has analyzed
+    const days = daysSince(err.lastOccurredAt);
+    if (days === 0) return 0;
+    if (days <= 3) return 1;
+    if (days <= 30) return 2;
+    return 3;
   }
 
   function getPriorityFromScore(err) {
+    if (err._aiPriority) return err._aiPriority;
+    // Fallback before AI analysis
     const days = daysSince(err.lastOccurredAt);
     if (days === 0) return 'critical';
     if (days <= 3) return 'high';
@@ -339,6 +350,9 @@
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       currentAnalysis = data.analysis;
+      // Store AI priority back on the error so the list can re-sort
+      selectedError._aiPriority = data.analysis.priority;
+      applyFilters();
       currentJiraDraft = {
         title: data.analysis.jiraTitle,
         priority: data.analysis.priority,
