@@ -11,7 +11,7 @@ export default async function handler(req, res) {
   if (action === "fetch_raygun") {
     try {
       const raygunRes = await fetch(
-        "https://api.raygun.com/v3/applications/19hynx5/error-groups?count=100&sortBy=lastOccurredAt&sortOrder=desc",
+        "https://api.raygun.com/v3/applications/19hynx5/error-groups?count=200&sortBy=lastOccurredAt&sortOrder=desc",
         {
           headers: {
             Authorization: `Bearer ${process.env.RAYGUN_TOKEN}`,
@@ -21,14 +21,8 @@ export default async function handler(req, res) {
       );
       const data = await raygunRes.json();
       const raw = Array.isArray(data) ? data : (data.data || []);
-      // Filter: exclude permanently ignored, keep only errors from last 12 months
-      const cutoff = new Date();
-      cutoff.setFullYear(cutoff.getFullYear() - 1);
-      const errors = raw.filter(e => {
-        if (e.status === 'permanentlyIgnored') return false;
-        const last = new Date(e.lastOccurredAt);
-        return last >= cutoff;
-      });
+      // Only show active errors (matching Raygun's Active tab)
+      const errors = raw.filter(e => e.status === 'active');
       return res.status(200).json({ errors });
     } catch (e) {
       return res.status(500).json({ error: e.message });
@@ -102,18 +96,24 @@ Return this exact JSON:
         max_tokens: 1000,
         messages: [{
           role: "user",
-          content: `Create a Jira issue in project ${jiraData.project} with these details:\n- Summary: ${jiraData.title}\n- Issue Type: Bug\n- Priority: ${priorityMap[jiraData.priority] || "Medium"}\n- Description: ${jiraData.description}`,
+          content: `Create a Jira issue in project ${jiraData.project} with these details:\n- Summary: ${jiraData.title}\n- Issue Type: Bug\n- Priority: ${priorityMap[jiraData.priority] || "Medium"}\n- Description: ${jiraData.description}\n- Assignee account ID: ${jiraData.assigneeId || ""}`,
         }],
         mcp_servers: [{ type: "url", url: "https://mcp.atlassian.com/v1/mcp", name: "atlassian" }],
       }),
     });
     const data = await aiRes.json();
-    const toolResult = data.content?.find(b => b.type === "mcp_tool_result");
-    const textBlock = data.content?.find(b => b.type === "text");
     let ticketKey = null;
-    if (toolResult?.content?.[0]?.text) {
-      try { ticketKey = JSON.parse(toolResult.content[0].text).key; } catch {}
+    for (const block of (data.content || [])) {
+      if (block.type === "mcp_tool_result") {
+        const rt = block.content?.[0]?.text || "";
+        try { const p = JSON.parse(rt); if (p.key) { ticketKey = p.key; break; } } catch {}
+        const m = rt.match(/[A-Z]+-[0-9]+/); if (m) { ticketKey = m[0]; break; }
+      }
+      if (block.type === "text" && block.text && !ticketKey) {
+        const m = block.text.match(/[A-Z]+-[0-9]+/); if (m) ticketKey = m[0];
+      }
     }
+    const textBlock = data.content?.find(b => b.type === "text");
     return res.status(200).json({ success: true, key: ticketKey, message: textBlock?.text });
   }
 
