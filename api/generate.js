@@ -25,14 +25,18 @@ export default async function handler(req, res) {
             },
           }
         );
+        // Log total count on first page
+        if (offset === 0) {
+          const totalCount = raygunRes.headers.get("X-Raygun-Total-Count");
+          console.log("Raygun total count header:", totalCount);
+        }
         const data = await raygunRes.json();
         const page = Array.isArray(data) ? data : (data.data || []);
+        console.log(`Page offset=${offset} returned ${page.length} errors`);
         if (page.length === 0) break;
         allErrors.push(...page);
         offset += pageSize;
-        // Stop if we got fewer results than requested (last page)
         if (page.length < pageSize) keepFetching = false;
-        // Safety cap at 500 errors
         if (allErrors.length >= 500) keepFetching = false;
       }
 
