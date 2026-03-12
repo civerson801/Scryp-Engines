@@ -99,7 +99,7 @@ Return this exact JSON:
   if (action === "create_jira" && jiraData) {
     const atlassianEmail = process.env.ATLASSIAN_EMAIL;
     const atlassianToken = process.env.ATLASSIAN_TOKEN;
-    const jiraDomain = "checkcity.atlassian.net";
+    const jiraDomain = "softwise.atlassian.net";
 
     if (!atlassianEmail || !atlassianToken) {
       return res.status(500).json({ error: "ATLASSIAN_EMAIL or ATLASSIAN_TOKEN not set in Vercel environment variables" });
