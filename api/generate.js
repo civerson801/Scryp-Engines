@@ -54,7 +54,35 @@ export default async function handler(req, res) {
     if (!process.env.ANTHROPIC_API_KEY) {
       return res.status(500).json({ error: "ANTHROPIC_API_KEY not set" });
     }
-    const analysisPrompt = `You are a senior engineering triage assistant for a fintech company called Check City (CCO - Check City Online). Analyze this JavaScript/application error and return ONLY valid JSON with no markdown, no code fences.
+
+    // Fetch full error details + stack trace from Raygun
+    let stackTrace = "";
+    let errorContext = "";
+    try {
+      const detailRes = await fetch(
+        `https://api.raygun.com/v3/applications/19hynx5/error-groups/${errorData.identifier}`,
+        { headers: { Authorization: `Bearer ${process.env.RAYGUN_TOKEN}` } }
+      );
+      const detail = await detailRes.json();
+      // Get stack trace from first occurrence
+      if (detail.firstOccurrence?.stackTrace) {
+        stackTrace = detail.firstOccurrence.stackTrace
+          .slice(0, 15)
+          .map(f => `  at ${f.methodName || f.className || "unknown"} (${f.fileName || ""}:${f.lineNumber || ""})`)
+          .join("
+");
+      }
+      if (detail.firstOccurrence?.request?.url) {
+        errorContext = `Request URL: ${detail.firstOccurrence.request.url}`;
+      }
+      if (detail.firstOccurrence?.request?.httpMethod) {
+        errorContext += ` [${detail.firstOccurrence.request.httpMethod}]`;
+      }
+    } catch (e) {
+      console.log("Could not fetch stack trace:", e.message);
+    }
+
+    const analysisPrompt = `You are a senior engineering triage assistant for a fintech company called Check City (CCO - Check City Online). Analyze this error and return ONLY valid JSON with no markdown, no code fences.
 
 Error details:
 - Message: ${errorData.message || "N/A"}
@@ -62,6 +90,9 @@ Error details:
 - Last Seen: ${errorData.lastOccurredAt || "N/A"}
 - Status: ${errorData.status || "N/A"}
 - Raygun Error URL: ${errorData.applicationUrl || "N/A"}
+- Request Context: ${errorContext || "N/A"}
+- Stack Trace:
+${stackTrace || "Not available"}
 
 Priority guide (base priority on user/system impact, NOT recency):
 - critical: directly blocks core user workflows (login, payments, loan applications, account access) OR causes data loss/corruption OR affects many users simultaneously
@@ -74,8 +105,8 @@ Always consider: how many users are affected, how critical is the broken feature
 Return this exact JSON (all fields required, no nulls):
 {
   "priority": "critical|high|medium|low",
-  "plainEnglish": "2-3 sentence plain-English explanation for a Product Manager",
-  "impact": "Specific business impact for Check City Online (CCO). Reference the actual feature broken (e.g. loan application, payment processing, account login, document upload, identity verification). State whether it blocks revenue, affects compliance, or degrades a specific user workflow. Be concrete — avoid vague phrases like 'may affect users'.",
+  "plainEnglish": "2-3 sentences explaining what is broken in plain English for a Product Manager who has no technical background. Use the stack trace to identify WHICH page or feature is affected. Describe what the user would actually experience — what they were trying to do, what went wrong, and whether they can continue or are fully blocked.",
+  "impact": "Based on the stack trace and request URL, identify the specific CCO feature or page that is broken (e.g. loan application form, payment page, login screen, document upload, account dashboard). Explain in plain English what a customer trying to use that feature would experience. State whether this fully blocks them from completing their task or just causes friction. Reference whether it likely affects revenue (e.g. blocking loan submissions or payments) or compliance. Write this for a Product Manager — no technical jargon.",
   "rootCause": "Likely technical root cause in 1-2 sentences",
   "recommendation": "Specific first step the dev team should take",
   "priorityReason": "One sentence explaining priority based on recency and likely business impact",
@@ -83,7 +114,7 @@ Return this exact JSON (all fields required, no nulls):
   "summary": "2-3 sentences describing what is broken and what the user experiences. Write for a non-technical audience.",
   "stepsToReproduce": "Numbered steps a tester could follow to reproduce this issue. If exact steps are unknown, write: 'Steps require investigation — see Raygun URL for context.'",
   "environment": "Where this occurs — include browser/platform if known, affected URL or page, and whether it is production or QA. Default to: Production (checkcity.com) if unknown.",
-  "technicalDetails": "Error message verbatim, Raygun URL, first seen date, last seen date, likely technical cause"
+  "technicalDetails": "Error message verbatim, Raygun URL, first seen date, last seen date, request URL if available, top 3-5 relevant stack frames in plain text, likely technical cause"
 }`;
 
     const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
