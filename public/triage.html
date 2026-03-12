@@ -421,29 +421,23 @@
     btn.disabled = true;
     btn.textContent = 'creating in jira...';
 
-    const priorityMap = { critical: 'Highest', high: 'High', medium: 'Medium', low: 'Low' };
-
     try {
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
+      const res = await fetch(API, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 1000,
-          messages: [{
-            role: 'user',
-            content: `Create a Jira issue in project ${JIRA_PROJECT} with these details:\n- Summary: ${currentJiraDraft.title}\n- Issue Type: Bug\n- Priority: ${priorityMap[currentJiraDraft.priority] || 'Medium'}\n- Description: ${currentJiraDraft.description}`
-          }],
-          mcp_servers: [{ type: 'url', url: 'https://mcp.atlassian.com/v1/mcp', name: 'atlassian' }]
+          action: 'create_jira',
+          jiraData: {
+            project: JIRA_PROJECT,
+            title: currentJiraDraft.title,
+            description: currentJiraDraft.description,
+            priority: currentJiraDraft.priority
+          }
         })
       });
       const data = await res.json();
-      const toolResult = data.content?.find(b => b.type === 'mcp_tool_result');
-      let ticketKey = null;
-      if (toolResult?.content?.[0]?.text) {
-        try { ticketKey = JSON.parse(toolResult.content[0].text).key; } catch {}
-      }
-      document.getElementById('jiraResult').innerHTML = `<div class="result-msg success">✓ ${ticketKey || 'Ticket'} created in ${JIRA_PROJECT} backlog</div>`;
+      if (data.error) throw new Error(data.error);
+      document.getElementById('jiraResult').innerHTML = `<div class="result-msg success">✓ ${data.key || 'Ticket'} created in ${JIRA_PROJECT} backlog</div>`;
       btn.className = 'jira-btn success';
       btn.textContent = '✓ created';
     } catch(e) {
