@@ -2,16 +2,33 @@ export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).end();
-
-  const { prompt } = req.body;
-
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return res.status(500).json({ text: "ERROR: ANTHROPIC_API_KEY is not set in environment variables." });
+ 
+  const { prompt, raygunFetch } = req.body;
+ 
+  // If this is a Raygun data fetch request
+  if (raygunFetch) {
+    const { url } = raygunFetch;
+    try {
+      const raygunRes = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${process.env.RAYGUN_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+      });
+      const data = await raygunRes.json();
+      return res.status(200).json({ raygunData: data });
+    } catch (e) {
+      return res.status(500).json({ error: e.message });
+    }
   }
-
+ 
+  // Original AI generation logic
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return res.status(500).json({ text: "ERROR: ANTHROPIC_API_KEY is not set." });
+  }
+ 
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -25,7 +42,6 @@ export default async function handler(req, res) {
       messages: [{ role: "user", content: prompt }],
     }),
   });
-
   const data = await response.json();
   const text = data?.content?.[0]?.text || JSON.stringify(data);
   res.status(200).json({ text });
