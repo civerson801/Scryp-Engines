@@ -52,31 +52,60 @@ export default async function handler(req, res) {
   // Debug: test MCP connectivity and return raw responses
   if (action === "debug_mcp" && errorData) {
     const MCP_URL = "https://api.raygun.com/v3/mcp";
+    const mcpHeaders = {
+      Authorization: `Bearer ${process.env.RAYGUN_TOKEN}`,
+      "Content-Type": "application/json",
+      Accept: "application/json, text/event-stream",
+    };
     const log = [];
-    try {
-      const body = JSON.stringify({
-        jsonrpc: "2.0", id: Date.now(), method: "tools/call",
-        params: { name: "error_group_investigate", arguments: {
-          applicationIdentifier: "19hynx5",
-          errorGroupIdentifier: errorData.identifier,
-        }},
-      });
+
+    // Helper to POST to MCP and return full response text
+    async function mcpPost(method, params) {
       const r = await fetch(MCP_URL, {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${process.env.RAYGUN_TOKEN}`,
-          "Content-Type": "application/json",
-          Accept: "application/json, text/event-stream",
-        },
-        body,
+        headers: mcpHeaders,
+        body: JSON.stringify({ jsonrpc: "2.0", id: Date.now(), method, params }),
       });
       const ct = r.headers.get("content-type") || "";
       const text = await r.text();
-      log.push({ step: "error_group_investigate", status: r.status, contentType: ct, bodyPreview: text.slice(0, 1000) });
-    } catch (e) {
-      log.push({ step: "error_group_investigate", error: e.message });
+      // Parse SSE or JSON
+      let parsed = null;
+      if (ct.includes("text/event-stream")) {
+        const lines = text.split("\n").filter(l => l.startsWith("data:"));
+        for (let i = lines.length - 1; i >= 0; i--) {
+          try { parsed = JSON.parse(lines[i].slice(5).trim()); break; } catch {}
+        }
+      } else {
+        try { parsed = JSON.parse(text); } catch {}
+      }
+      return { status: r.status, contentType: ct, rawText: text.slice(0, 2000), parsed };
     }
-    return res.status(200).json({ debug: log });
+
+    // Step 1: discover available tools
+    try {
+      const listResult = await mcpPost("tools/list", {});
+      log.push({ step: "tools/list", ...listResult });
+    } catch (e) { log.push({ step: "tools/list", error: e.message }); }
+
+    // Step 2: try error_group_investigate with full error identifier
+    try {
+      const r = await mcpPost("tools/call", {
+        name: "error_group_investigate",
+        arguments: { applicationIdentifier: "19hynx5", errorGroupIdentifier: errorData.identifier },
+      });
+      log.push({ step: "error_group_investigate", ...r });
+    } catch (e) { log.push({ step: "error_group_investigate", error: e.message }); }
+
+    // Step 3: try error_instances_browse
+    try {
+      const r = await mcpPost("tools/call", {
+        name: "error_instances_browse",
+        arguments: { applicationIdentifier: "19hynx5", errorGroupIdentifier: errorData.identifier, count: 1 },
+      });
+      log.push({ step: "error_instances_browse", ...r });
+    } catch (e) { log.push({ step: "error_instances_browse", error: e.message }); }
+
+    return res.status(200).json({ errorIdentifier: errorData.identifier, debug: log });
   }
 
   // Analyze a single error with AI
@@ -124,7 +153,8 @@ export default async function handler(req, res) {
         for (let i = lines.length - 1; i >= 0; i--) {
           try {
             const json = JSON.parse(lines[i].slice(5).trim());
-            if (json?.result) return json.result;
+            // Return the result object — may have isError:true which caller checks
+            if (json?.result !== undefined) return json.result;
           } catch {}
         }
         console.log(`[MCP] ${toolName} SSE: no result found in ${lines.length} data lines`);
@@ -136,15 +166,25 @@ export default async function handler(req, res) {
       console.log(`[MCP] ${toolName} JSON raw (first 500): ${text.slice(0, 500)}`);
       try {
         const json = JSON.parse(text);
-        return json?.result || null;
+        // Return result object — may have isError:true
+        return json?.result !== undefined ? json.result : null;
       } catch {
         return null;
       }
     }
 
     // ── Helper: extract stack trace data from MCP result content ───────────────
+    // Returns empty string if the result is an MCP error (isError: true)
     function extractFromMcpContent(result) {
       if (!result) return "";
+      // MCP error response — don't pass this garbage to the AI
+      if (result.isError === true) {
+        const errText = Array.isArray(result.content)
+          ? result.content.map(c => c.text || "").join(" ")
+          : "";
+        console.log(`[MCP] isError=true: ${errText.slice(0, 200)}`);
+        return "";
+      }
       return Array.isArray(result.content)
         ? result.content.map(c => c.text || "").join("\n")
         : typeof result === "string" ? result : JSON.stringify(result);
@@ -270,6 +310,9 @@ export default async function handler(req, res) {
 
     console.log(`[TRIAGE] Stack source: ${stackTraceSource}, rawData: ${rawInstanceData.length} chars, stackTrace: ${stackTrace.length} chars`);
 
+    // If we have no instance data at all, use a minimal prompt that returns honest unknowns
+    const hasData = rawInstanceData.length > 0 || stackTrace.length > 0;
+
     const analysisPrompt = `You are a senior engineering triage assistant for a fintech company called Check City (CCO - Check City Online). Analyze this error and return ONLY valid JSON with no markdown, no code fences.
 
 Error details:
@@ -280,10 +323,15 @@ Error details:
 - Raygun Error URL: ${errorData.applicationUrl || "N/A"}
 - Request Context: ${errorContext || "N/A"}
 - Stack Trace (structured):
-${stackTrace || "See raw data below"}
+${stackTrace || (hasData ? "See raw data below" : "Not available — stack trace could not be retrieved")}
 
 Raw Raygun Instance Data (use this as your primary source — extract stack trace, request URL, machine name, user info, environment, SQL errors, etc. from here):
-${rawInstanceData ? rawInstanceData.slice(0, 6000) : "Not available"}
+${hasData ? rawInstanceData.slice(0, 6000) : "Not available — instance data could not be retrieved from Raygun"}
+
+${!hasData ? `IMPORTANT: No stack trace or instance data was available for this error. You only have the error message and timestamps above.
+Base your analysis ONLY on what the error message itself tells you. Do NOT invent details about affected pages, users, or root causes that you cannot confirm from the message alone.
+For fields where you genuinely cannot determine the answer, use "Insufficient data — stack trace required" rather than speculating.
+For priority: if the error message suggests a critical system (login, payments, loans), assign medium as a conservative estimate. Otherwise assign low.` : ""}
 
 Priority guide (base priority on user/system impact, NOT recency):
 - critical: directly blocks core user workflows (login, payments, loan applications, account access) OR causes data loss/corruption OR affects many users simultaneously
