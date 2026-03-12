@@ -75,7 +75,7 @@ Return this exact JSON (all fields required, no nulls):
 {
   "priority": "critical|high|medium|low",
   "plainEnglish": "2-3 sentence plain-English explanation for a Product Manager",
-  "impact": "Who and what is affected, business impact on CCO users",
+  "impact": "Specific business impact for Check City Online (CCO). Reference the actual feature broken (e.g. loan application, payment processing, account login, document upload, identity verification). State whether it blocks revenue, affects compliance, or degrades a specific user workflow. Be concrete — avoid vague phrases like 'may affect users'.",
   "rootCause": "Likely technical root cause in 1-2 sentences",
   "recommendation": "Specific first step the dev team should take",
   "priorityReason": "One sentence explaining priority based on recency and likely business impact",
