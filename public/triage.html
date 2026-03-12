@@ -379,6 +379,7 @@
           stepsToReproduce: data.analysis.stepsToReproduce,
           environment: data.analysis.environment,
           technicalDetails: data.analysis.technicalDetails,
+          developerNotes: data.analysis.developerNotes || selectedError?.applicationUrl || "",
         }
       };
       renderAnalysis();
@@ -420,15 +421,26 @@
     } else {
       const s = currentJiraDraft?.sections || {};
       const sectionOrder = [
-        ['Description', s.summary + (s.technicalDetails ? '\n\n' + s.technicalDetails : '')],
+        ['Description', (s.summary || '') + (s.technicalDetails ? '\n\n' + s.technicalDetails : '')],
         ['Reproduction Steps', s.stepsToReproduce],
         ['Environment', s.environment],
+        ['Acceptance Criteria', ''],
+        ['Developer Notes', s.developerNotes || ''],
       ];
-      const sectionsHtml = sectionOrder.map(([label, val]) => `
-        <div style="margin-bottom:14px">
+      const sectionsHtml = sectionOrder.map(([label, val]) => {
+        let display;
+        if (!val) {
+          display = `<span style="color:var(--text-muted);font-style:italic">Add text</span>`;
+        } else if (label === 'Developer Notes' && val.startsWith('http')) {
+          display = `<a href="${val}" target="_blank" style="color:var(--accent);font-size:13px;word-break:break-all">${val}</a>`;
+        } else {
+          display = `<div style="font-size:13px;color:var(--text-secondary);line-height:1.7;white-space:pre-wrap">${escHtml(val)}</div>`;
+        }
+        return `<div style="margin-bottom:14px">
           <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--text-muted);margin-bottom:4px">${label}</div>
-          <div style="font-size:13px;color:var(--text-secondary);line-height:1.7">${escHtml(val||'To be investigated.')}</div>
-        </div>`).join('');
+          ${display}
+        </div>`;
+      }).join('');
       content = `<div class="jira-section">
         <div class="jira-field">
           <div class="jira-field-label">Ticket Title</div>
@@ -457,7 +469,7 @@
     if (!btn || !currentJiraDraft) return;
     btn.disabled = true; btn.textContent = 'Creating ticket...';
     try {
-      const res = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'create_jira', jiraData: { project: JIRA_PROJECT, title: currentJiraDraft.title, sections: currentJiraDraft.sections, priority: currentJiraDraft.priority, assigneeId: JIRA_ASSIGNEE_ID } }) });
+      const res = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'create_jira', jiraData: { project: JIRA_PROJECT, title: currentJiraDraft.title, sections: currentJiraDraft.sections, priority: currentJiraDraft.priority, assigneeId: JIRA_ASSIGNEE_ID, raygunUrl: selectedError?.applicationUrl || '' } }) });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       const key = data.key || 'Ticket';
