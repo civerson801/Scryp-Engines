@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/triage",
+      "destination": "/triage.html"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "/api/$1"
     }
