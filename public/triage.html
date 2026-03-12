@@ -408,7 +408,7 @@
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       const key = data.key || 'Ticket';
-      const url = data.key ? `https://checkcity.atlassian.net/browse/${data.key}` : null;
+      const url = data.key ? `https://softwise.atlassian.net/browse/${data.key}` : null;
       document.getElementById('jiraResult').innerHTML = `<div class="result-msg success">✅ <strong>${key}</strong> created in ${JIRA_PROJECT} and assigned to you${url ? ` — <a href="${url}" target="_blank">View in Jira →</a>` : ''}</div>`;
       btn.className = 'jira-btn success'; btn.textContent = `✓ ${key} Created`;
     } catch(e) {
