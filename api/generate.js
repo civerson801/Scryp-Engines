@@ -11,7 +11,7 @@ export default async function handler(req, res) {
   if (action === "fetch_raygun") {
     try {
       const raygunRes = await fetch(
-        "https://api.raygun.com/v3/applications/19hynx5/error-groups?count=50&sortBy=lastOccurredAt&sortOrder=desc&status=active",
+        "https://api.raygun.com/v3/applications/19hynx5/error-groups?count=100&sortBy=lastOccurredAt&sortOrder=desc",
         {
           headers: {
             Authorization: `Bearer ${process.env.RAYGUN_TOKEN}`,
@@ -20,7 +20,16 @@ export default async function handler(req, res) {
         }
       );
       const data = await raygunRes.json();
-      return res.status(200).json({ errors: Array.isArray(data) ? data : (data.data || []) });
+      const raw = Array.isArray(data) ? data : (data.data || []);
+      // Filter: exclude permanently ignored, keep only errors from last 12 months
+      const cutoff = new Date();
+      cutoff.setFullYear(cutoff.getFullYear() - 1);
+      const errors = raw.filter(e => {
+        if (e.status === 'permanentlyIgnored') return false;
+        const last = new Date(e.lastOccurredAt);
+        return last >= cutoff;
+      });
+      return res.status(200).json({ errors });
     } catch (e) {
       return res.status(500).json({ error: e.message });
     }
