@@ -63,11 +63,13 @@ Error details:
 - Status: ${errorData.status || "N/A"}
 - Raygun Error URL: ${errorData.applicationUrl || "N/A"}
 
-Priority guide (based on recency of last occurrence):
-- critical: seen today (within 24 hours)
-- high: seen within 1-3 days
-- medium: seen within 4-30 days
-- low: not seen in over 30 days
+Priority guide (base priority on user/system impact, NOT recency):
+- critical: directly blocks core user workflows (login, payments, loan applications, account access) OR causes data loss/corruption OR affects many users simultaneously
+- high: degrades a significant feature or causes frequent errors that frustrate users but does not fully block them, OR affects a key business process like notifications or reporting
+- medium: causes minor friction or edge case failures, limited user impact, workaround exists
+- low: cosmetic issues, rare edge cases, errors that do not affect functionality or user experience
+
+Always consider: how many users are affected, how critical is the broken feature to Check City's core business, and how severely is their experience degraded.
 
 Return this exact JSON (all fields required, no nulls):
 {
