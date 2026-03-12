@@ -165,9 +165,9 @@
         <div class="filter-row">
           <span class="filter-label">Last seen:</span>
           <select class="filter-select" id="dateFilter" onchange="applyFilters()">
-            <option value="7">Last 7 days</option>
+            <option value="7" selected>Last 7 days</option>
             <option value="30">Last 30 days</option>
-            <option value="90" selected>Last 90 days</option>
+            <option value="90">Last 90 days</option>
             <option value="365">Last year</option>
             <option value="0">All time</option>
           </select>
@@ -232,17 +232,31 @@
     return Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000);
   }
 
-  // Score errors: lower = more critical
+  // Score errors: combines recency + occurrence volume + user impact
   function scoreError(err) {
-    const daysSinceSeen = daysSince(err.lastOccurredAt);
-    const recencyScore = Math.min(daysSinceSeen, 365); // cap at 1 year
-    return recencyScore;
+    const days = daysSince(err.lastOccurredAt);
+    const recency = Math.min(days, 365);
+    const hits = err.occurrenceCount || 0;
+    const users = err.affectedUsersCount || 0;
+    // High hits or users reduce the score (making them float higher)
+    const volumeBonus = Math.min(Math.log10(hits + 1) * 10 + users * 2, 50);
+    return recency - volumeBonus;
   }
 
   function getPriorityFromScore(err) {
     const days = daysSince(err.lastOccurredAt);
-    if (days <= 1) return 'critical';
-    if (days <= 7) return 'high';
+    const hits = err.occurrenceCount || 0;
+    const users = err.affectedUsersCount || 0;
+    // Seen today
+    if (days === 0) {
+      if (hits > 500 || users > 10) return 'critical';
+      return 'high';
+    }
+    // Seen this week
+    if (days <= 7) {
+      if (hits > 200 || users > 5) return 'high';
+      return 'medium';
+    }
     if (days <= 30) return 'medium';
     return 'low';
   }
@@ -309,9 +323,9 @@
         </div>
         <div class="error-msg">${escHtml(msg)}</div>
         <div class="error-meta-row">
-          <span>First: ${timeAgo(err.createdAt)}</span>
-          ${err.occurrenceCount ? `<span>· ${err.occurrenceCount.toLocaleString()} hits</span>` : ''}
-          ${err.affectedUsersCount ? `<span>· ${err.affectedUsersCount} users</span>` : ''}
+          ${err.occurrenceCount ? `<span>🔁 ${err.occurrenceCount.toLocaleString()} hits</span>` : ''}
+          ${err.affectedUsersCount ? `<span>· 👤 ${err.affectedUsersCount} users</span>` : ''}
+          <span>· First: ${timeAgo(err.createdAt)}</span>
         </div>
       </div>`;
     }).join('');
