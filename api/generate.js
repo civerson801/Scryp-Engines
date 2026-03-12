@@ -36,7 +36,10 @@ export default async function handler(req, res) {
         if (allErrors.length >= 500) keepFetching = false;
       }
 
-      const errors = allErrors.filter(e => e.status === "active");
+      // Return active errors, sorted by lastOccurredAt desc
+      const errors = allErrors
+        .filter(e => e.status === "active")
+        .sort((a, b) => new Date(b.lastOccurredAt) - new Date(a.lastOccurredAt));
       return res.status(200).json({ errors });
     } catch (e) {
       return res.status(500).json({ error: e.message });
@@ -104,31 +107,47 @@ Return this exact JSON:
         "Content-Type": "application/json",
         "x-api-key": process.env.ANTHROPIC_API_KEY,
         "anthropic-version": "2023-06-01",
+        "anthropic-beta": "mcp-client-2025-04-04",
       },
       body: JSON.stringify({
         model: "claude-sonnet-4-20250514",
         max_tokens: 1000,
         messages: [{
           role: "user",
-          content: `Create a Jira issue in project ${jiraData.project} with these details:\n- Summary: ${jiraData.title}\n- Issue Type: Bug\n- Priority: ${priorityMap[jiraData.priority] || "Medium"}\n- Description: ${jiraData.description}\n- Assignee account ID: ${jiraData.assigneeId || ""}`,
+          content: `Use the Jira MCP tool to create a new issue with these exact details:\n- Project: ${jiraData.project}\n- Summary: ${jiraData.title}\n- Issue Type: Bug\n- Priority: ${priorityMap[jiraData.priority] || "Medium"}\n- Description: ${jiraData.description}\n- Assignee accountId: ${jiraData.assigneeId || ""}\n\nAfter creating, respond with just the issue key (e.g. TDG-123).`,
         }],
         mcp_servers: [{ type: "url", url: "https://mcp.atlassian.com/v1/mcp", name: "atlassian" }],
       }),
     });
     const data = await aiRes.json();
+    console.log("Jira MCP raw response:", JSON.stringify(data, null, 2));
+
     let ticketKey = null;
     for (const block of (data.content || [])) {
       if (block.type === "mcp_tool_result") {
         const rt = block.content?.[0]?.text || "";
-        try { const p = JSON.parse(rt); if (p.key) { ticketKey = p.key; break; } } catch {}
+        console.log("mcp_tool_result text:", rt);
+        try {
+          const p = JSON.parse(rt);
+          if (p.key) { ticketKey = p.key; break; }
+          if (p.id) { ticketKey = p.id; break; }
+        } catch {}
         const m = rt.match(/[A-Z]+-[0-9]+/); if (m) { ticketKey = m[0]; break; }
       }
-      if (block.type === "text" && block.text && !ticketKey) {
-        const m = block.text.match(/[A-Z]+-[0-9]+/); if (m) ticketKey = m[0];
+      if (block.type === "text" && block.text) {
+        console.log("text block:", block.text);
+        if (!ticketKey) {
+          const m = block.text.match(/[A-Z]+-[0-9]+/); if (m) ticketKey = m[0];
+        }
       }
     }
+
+    if (data.error) {
+      return res.status(500).json({ error: data.error.message || JSON.stringify(data.error) });
+    }
+
     const textBlock = data.content?.find(b => b.type === "text");
-    return res.status(200).json({ success: true, key: ticketKey, message: textBlock?.text });
+    return res.status(200).json({ success: true, key: ticketKey, message: textBlock?.text, debug: data.content?.map(b => b.type) });
   }
 
   // Original prompt-based generation
