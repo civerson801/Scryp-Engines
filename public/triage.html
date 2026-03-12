@@ -486,6 +486,7 @@
       </div>
       <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
         ${selectedError.applicationUrl ? `<a href="${selectedError.applicationUrl}" target="_blank" class="raygun-link">↗ View in Raygun</a>` : ''}
+        <button onclick="debugMcp()" style="font-size:11px;padding:3px 8px;border-radius:4px;border:1px solid #d1d5db;background:#f9fafb;color:#6b7280;cursor:pointer">🔬 Debug MCP</button>
         ${getTicketForError(selectedError.identifier) ? `<a href="https://softwise.atlassian.net/browse/${getTicketForError(selectedError.identifier)}" target="_blank" style="font-size:12px;color:#2563eb;font-weight:600;text-decoration:none">🎫 ${getTicketForError(selectedError.identifier)} — View in Jira →</a>` : ''}
       </div>
     </div>`;
@@ -596,6 +597,23 @@
     }
 
     setPanelContent(`<div class="panel-inner">${errorCardHTML()}${tabsHTML()}${content}</div>`);
+  }
+
+  async function debugMcp() {
+    if (!selectedError) return;
+    const win = window.open('', '_blank', 'width=800,height=600,scrollbars=yes');
+    win.document.write('<html><head><title>MCP Debug</title><style>body{font-family:monospace;font-size:12px;padding:16px;white-space:pre-wrap;word-break:break-all;}</style></head><body>Running MCP diagnostic for error: ' + selectedError.identifier + '\n\nWaiting...</body></html>');
+    try {
+      const res = await fetch(API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'debug_mcp', errorData: selectedError }),
+      });
+      const data = await res.json();
+      win.document.body.textContent = 'MCP Debug Results for: ' + selectedError.identifier + '\n\n' + JSON.stringify(data, null, 2);
+    } catch(e) {
+      win.document.body.textContent = 'Debug fetch failed: ' + e.message;
+    }
   }
 
   async function createJiraTicket() {
