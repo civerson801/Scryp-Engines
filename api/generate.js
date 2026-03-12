@@ -51,25 +51,31 @@ export default async function handler(req, res) {
     if (!process.env.ANTHROPIC_API_KEY) {
       return res.status(500).json({ error: "ANTHROPIC_API_KEY not set" });
     }
-    const analysisPrompt = `You are a senior engineering triage assistant for a fintech company called Check City (CCO system). Analyze this error and return ONLY valid JSON with no markdown.
+    const analysisPrompt = `You are a senior engineering triage assistant for a fintech company called Check City (CCO - Check City Online). Analyze this JavaScript/application error and return ONLY valid JSON with no markdown, no code fences.
 
-Error:
+Error details:
 - Message: ${errorData.message || "N/A"}
 - First Seen: ${errorData.createdAt || "N/A"}
 - Last Seen: ${errorData.lastOccurredAt || "N/A"}
 - Status: ${errorData.status || "N/A"}
-- URL: ${errorData.applicationUrl || "N/A"}
+- Raygun URL: ${errorData.applicationUrl || "N/A"}
+- Occurrences: ${errorData.occurrenceCount || "N/A"}
+- Users Affected: ${errorData.affectedUsersCount || "N/A"}
 
-Return this exact JSON:
+Return this exact JSON (all fields required, no nulls):
 {
   "priority": "critical|high|medium|low",
-  "plainEnglish": "2-3 sentence explanation for a Product Manager",
-  "impact": "Who and what is affected, business impact",
-  "rootCause": "Likely technical root cause",
-  "recommendation": "What the dev team should investigate first",
-  "jiraTitle": "[BUG] Concise ticket title",
-  "jiraDescription": "Full bug description with sections: *Summary*, *Steps to Reproduce*, *Expected Behavior*, *Actual Behavior*, *Impact*, *Technical Details*",
-  "priorityReason": "One sentence explaining the priority"
+  "plainEnglish": "2-3 sentence plain-English explanation for a Product Manager",
+  "impact": "Who and what is affected, business impact on CCO users",
+  "rootCause": "Likely technical root cause in 1-2 sentences",
+  "recommendation": "Specific first step the dev team should take",
+  "priorityReason": "One sentence explaining why this priority level",
+  "jiraTitle": "[BUG] Concise descriptive ticket title under 80 chars",
+  "summary": "2-3 sentence summary of the bug for the Jira description header",
+  "stepsToReproduce": "Numbered steps to reproduce, or note that investigation is required if steps are unknown",
+  "expectedBehavior": "What should happen without this error",
+  "actualBehavior": "What actually happens due to this error",
+  "technicalDetails": "Error message, Raygun URL, first/last seen dates, occurrence count, likely cause"
 }`;
 
     const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
@@ -108,12 +114,38 @@ Return this exact JSON:
     const priorityMap = { critical: "Highest", high: "High", medium: "Medium", low: "Low" };
     const auth = Buffer.from(`${atlassianEmail}:${atlassianToken}`).toString("base64");
 
-    // Build ADF description
-    const descLines = (jiraData.description || "").split("\n").filter(Boolean);
-    const adfContent = descLines.map(line => ({
-      type: "paragraph",
-      content: [{ type: "text", text: line }]
-    }));
+    // Build ADF description with structured sections
+    function adfHeading(text, level = 3) {
+      return { type: "heading", attrs: { level }, content: [{ type: "text", text }] };
+    }
+    function adfParagraph(text) {
+      return { type: "paragraph", content: [{ type: "text", text: text || "To be investigated." }] };
+    }
+    function adfBullet(items) {
+      return {
+        type: "bulletList",
+        content: items.map(item => ({
+          type: "listItem",
+          content: [{ type: "paragraph", content: [{ type: "text", text: item }] }]
+        }))
+      };
+    }
+
+    const d = jiraData.sections || {};
+    const adfContent = [
+      adfHeading("Summary"),
+      adfParagraph(d.summary),
+      adfHeading("Steps to Reproduce"),
+      adfParagraph(d.stepsToReproduce),
+      adfHeading("Expected Behavior"),
+      adfParagraph(d.expectedBehavior),
+      adfHeading("Actual Behavior"),
+      adfParagraph(d.actualBehavior),
+      adfHeading("Impact"),
+      adfParagraph(d.impact),
+      adfHeading("Technical Details"),
+      adfParagraph(d.technicalDetails),
+    ];
 
     const body = {
       fields: {
@@ -121,11 +153,10 @@ Return this exact JSON:
         summary: jiraData.title,
         issuetype: { name: "Bug" },
         priority: { name: priorityMap[jiraData.priority] || "Medium" },
-        description: {
-          type: "doc",
-          version: 1,
-          content: adfContent.length ? adfContent : [{ type: "paragraph", content: [{ type: "text", text: jiraData.description || "" }] }]
-        },
+        labels: ["CCO", "Raygun"],
+        components: [{ name: "Web" }],
+        parent: { key: "TDG-125" },
+        description: { type: "doc", version: 1, content: adfContent },
       }
     };
 
