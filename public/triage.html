@@ -344,7 +344,18 @@
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       currentAnalysis = data.analysis;
-      currentJiraDraft = { title: data.analysis.jiraTitle, description: data.analysis.jiraDescription, priority: data.analysis.priority };
+      currentJiraDraft = {
+        title: data.analysis.jiraTitle,
+        priority: data.analysis.priority,
+        sections: {
+          summary: data.analysis.summary,
+          stepsToReproduce: data.analysis.stepsToReproduce,
+          expectedBehavior: data.analysis.expectedBehavior,
+          actualBehavior: data.analysis.actualBehavior,
+          impact: data.analysis.impact,
+          technicalDetails: data.analysis.technicalDetails,
+        }
+      };
       renderAnalysis();
     } catch(e) {
       document.getElementById('analysisPanel').innerHTML = `<div class="panel-inner">${errorCardHTML()}<div class="fetch-error">⚠ ${escHtml(e.message)}</div></div>`;
@@ -382,14 +393,34 @@
         </div>
         <button class="view-jira-btn" onclick="switchTab('jira')">Draft Jira Ticket →</button>`;
     } else {
+      const s = currentJiraDraft?.sections || {};
+      const sectionOrder = [
+        ['Summary', s.summary],
+        ['Steps to Reproduce', s.stepsToReproduce],
+        ['Expected Behavior', s.expectedBehavior],
+        ['Actual Behavior', s.actualBehavior],
+        ['Impact', s.impact],
+        ['Technical Details', s.technicalDetails],
+      ];
+      const sectionsHtml = sectionOrder.map(([label, val]) => `
+        <div style="margin-bottom:14px">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--text-muted);margin-bottom:4px">${label}</div>
+          <div style="font-size:13px;color:var(--text-secondary);line-height:1.7">${escHtml(val||'To be investigated.')}</div>
+        </div>`).join('');
       content = `<div class="jira-section">
         <div class="jira-field">
           <div class="jira-field-label">Ticket Title</div>
           <div class="jira-title-text">${escHtml(currentJiraDraft?.title||'')}</div>
         </div>
+        <div class="jira-field" style="display:flex;gap:16px;flex-wrap:wrap">
+          <div><div class="jira-field-label">Parent</div><div style="font-size:13px;font-weight:600;color:var(--accent)">TDG-125 · CCO</div></div>
+          <div><div class="jira-field-label">Labels</div><div style="font-size:13px">CCO &nbsp;·&nbsp; Raygun</div></div>
+          <div><div class="jira-field-label">Component</div><div style="font-size:13px">Web</div></div>
+          <div><div class="jira-field-label">Priority</div><div style="font-size:13px;font-weight:600;color:${(PRIORITIES[currentJiraDraft?.priority]||PRIORITIES.medium).color}">${(PRIORITIES[currentJiraDraft?.priority]||PRIORITIES.medium).label}</div></div>
+        </div>
         <div class="jira-field">
           <div class="jira-field-label">Description</div>
-          <div class="jira-desc">${escHtml(currentJiraDraft?.description||'')}</div>
+          ${sectionsHtml}
         </div>
         <div id="jiraResult"></div>
         <button class="jira-btn" id="jiraBtn" onclick="createJiraTicket()">→ Create in Jira Backlog · ${JIRA_PROJECT}</button>
@@ -404,7 +435,7 @@
     if (!btn || !currentJiraDraft) return;
     btn.disabled = true; btn.textContent = 'Creating ticket...';
     try {
-      const res = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'create_jira', jiraData: { project: JIRA_PROJECT, title: currentJiraDraft.title, description: currentJiraDraft.description, priority: currentJiraDraft.priority, assigneeId: JIRA_ASSIGNEE_ID } }) });
+      const res = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'create_jira', jiraData: { project: JIRA_PROJECT, title: currentJiraDraft.title, sections: currentJiraDraft.sections, priority: currentJiraDraft.priority, assigneeId: JIRA_ASSIGNEE_ID } }) });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       const key = data.key || 'Ticket';
