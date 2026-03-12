@@ -62,20 +62,26 @@ Error details:
 - Occurrences: ${errorData.occurrenceCount || "N/A"}
 - Users Affected: ${errorData.affectedUsersCount || "N/A"}
 
+Priority guide (use occurrence count and user impact heavily):
+- critical: seen today AND (500+ hits OR 10+ users affected)
+- high: seen within 7 days AND (200+ hits OR 5+ users affected), OR seen today with significant impact
+- medium: seen within 30 days, moderate impact
+- low: stale or low volume
+
 Return this exact JSON (all fields required, no nulls):
 {
   "priority": "critical|high|medium|low",
   "plainEnglish": "2-3 sentence plain-English explanation for a Product Manager",
-  "impact": "Who and what is affected, business impact on CCO users",
+  "impact": "Who and what is affected, business impact on CCO users. Mention occurrence count and user count.",
   "rootCause": "Likely technical root cause in 1-2 sentences",
   "recommendation": "Specific first step the dev team should take",
-  "priorityReason": "One sentence explaining why this priority level",
+  "priorityReason": "One sentence explaining priority — reference hit count, user count, and recency",
   "jiraTitle": "[BUG] Concise descriptive ticket title under 80 chars",
   "summary": "2-3 sentence summary of the bug for the Jira description header",
   "stepsToReproduce": "Numbered steps to reproduce, or note that investigation is required if steps are unknown",
   "expectedBehavior": "What should happen without this error",
   "actualBehavior": "What actually happens due to this error",
-  "technicalDetails": "Error message, Raygun URL, first/last seen dates, occurrence count, likely cause"
+  "technicalDetails": "Error message, Raygun URL, first/last seen dates, occurrence count and user count, likely cause"
 }`;
 
     const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
