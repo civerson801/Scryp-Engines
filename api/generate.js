@@ -58,30 +58,28 @@ Error details:
 - First Seen: ${errorData.createdAt || "N/A"}
 - Last Seen: ${errorData.lastOccurredAt || "N/A"}
 - Status: ${errorData.status || "N/A"}
-- Raygun URL: ${errorData.applicationUrl || "N/A"}
-- Occurrences: ${errorData.occurrenceCount || "N/A"}
-- Users Affected: ${errorData.affectedUsersCount || "N/A"}
+- Raygun Error URL: ${errorData.applicationUrl || "N/A"}
 
-Priority guide (use occurrence count and user impact heavily):
-- critical: seen today AND (500+ hits OR 10+ users affected)
-- high: seen within 7 days AND (200+ hits OR 5+ users affected), OR seen today with significant impact
-- medium: seen within 30 days, moderate impact
-- low: stale or low volume
+Priority guide (based on recency of last occurrence):
+- critical: seen today (within 24 hours)
+- high: seen within 1-3 days
+- medium: seen within 4-30 days
+- low: not seen in over 30 days
 
 Return this exact JSON (all fields required, no nulls):
 {
   "priority": "critical|high|medium|low",
   "plainEnglish": "2-3 sentence plain-English explanation for a Product Manager",
-  "impact": "Who and what is affected, business impact on CCO users. Mention occurrence count and user count.",
+  "impact": "Who and what is affected, business impact on CCO users",
   "rootCause": "Likely technical root cause in 1-2 sentences",
   "recommendation": "Specific first step the dev team should take",
-  "priorityReason": "One sentence explaining priority — reference hit count, user count, and recency",
+  "priorityReason": "One sentence explaining priority based on recency and likely business impact",
   "jiraTitle": "[BUG] Concise descriptive ticket title under 80 chars",
   "summary": "2-3 sentence summary of the bug for the Jira description header",
   "stepsToReproduce": "Numbered steps to reproduce, or note that investigation is required if steps are unknown",
   "expectedBehavior": "What should happen without this error",
   "actualBehavior": "What actually happens due to this error",
-  "technicalDetails": "Error message, Raygun URL, first/last seen dates, occurrence count and user count, likely cause"
+  "technicalDetails": "Error message, Raygun URL, first/last seen dates, likely cause"
 }`;
 
     const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
